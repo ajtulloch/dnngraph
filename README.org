@@ -1,0 +1,236 @@
+* CaffeGraph - A deep neural network model generation DSL in Haskell
+It consists of several parts:
+
+- A DSL for specifying the model. This uses the [[http://lens.github.io/][lens]] library for
+  elegant, composable constructions, and the [[hackage.haskell.org/package/fgl-5.5.0.1][fgl]] graph library for
+  specifying the network layout.
+- A set of optimization passes that run over the graph representation
+  to improve the performance of the model. For example, we can take
+  advantage of the fact that several layers types (=ReLU=, =Dropout=)
+  can operate in-place.
+- A set of backends to generate code for the platform.  Currently, we
+  generate
+  - Caffe (with model `.prototxt`'s)
+  - Torch (code-generating Lua scripts)
+- A set of useful tools for visualizing and understanding a model
+  (visualization of network structure, parameter density)
+- A set of useful tools for generating parameterized models (for
+  example, in hyperparameter sweeps)
+** DSL Examples
+The following script generates a replica of
+https://github.com/BVLC/caffe/blob/master/models/bvlc_alexnet/train_val.prototxt.
+
+*** AlexNet
+#+begin_src haskell
+  alexTrain = train & cropSize' 227 & batchSize' 256 & mirror' True
+  alexTest = test & cropSize' 227 & batchSize' 50 & mirror' False
+
+  alexLrn = lrn & localSize' 5 & alphaLRN' 0.0001 & betaLRN' 0.75
+  alexConv = conv & param' alexMult & weightFillerC' (gaussian 0.01) & biasFillerC' zero
+  alexIP n = ip n & param' alexMult & weightFillerIP' (gaussian 0.005) & biasFillerIP' (constant 0.1)
+  alexPool = maxPool & poolSize' 3
+
+  alexMult = [def & lrMult' 1 & decayMult' 1, -- weights
+              def & lrMult' 2 & decayMult' 0] -- biases
+
+  -- |Model
+  conv1 = alexConv & numOutput' 96 & kernelSize' 11 & stride' 4
+  pool1 = alexPool & poolStride' 3
+  conv2 = alexConv & numOutput' 256 & pad' 2 & kernelSize' 5 & group' 2
+  pool2 = alexPool & poolStride' 2
+  conv3 = alexConv & numOutput' 384 & pad' 1 & kernelSize' 3
+  conv4 = alexConv & numOutput' 384 & pad' 1 & kernelSize' 3 & group' 2 & biasFillerC' (constant 0.1)
+  conv5 = alexConv & numOutput' 256 & pad' 1 & kernelSize' 3 & group' 2 & biasFillerC' (constant 0.1)
+  pool5 = alexPool & poolStride' 2
+  ip6 = alexIP 4096
+  drop6 = dropout 0.5
+  ip7 = alexIP 4096
+  drop7 = dropout 0.5
+  ip8 = alexIP 1000 & weightFillerIP' (gaussian 0.01) & biasFillerIP' zero
+
+  alexNet = do
+    -- Set up the model
+    (input', representation) <-
+        sequential [
+             conv1, relu, alexLrn, pool1,
+             conv2, relu, alexLrn, pool2,
+             conv3, relu,
+             conv4, relu,
+             conv5, relu, pool5,
+             ip6, relu, drop6,
+             ip7, relu, drop7,
+             ip8]
+
+    forM_ [alexTrain, alexTest] $ attach (To input')
+    forM_ [accuracy 1, accuracy 5, softmax] $ attach (From representation)
+#+end_src
+
+
+*** GoogLeNet
+The following script generates a replica of
+https://github.com/BVLC/caffe/blob/master/models/bvlc_googlenet/train_val.prototxt
+
+#+begin_src haskell
+  googleTrain = train & mirror' True & batchSize' 32 & cropSize' 224
+  googleTest = test & mirror' False & batchSize' 50 & cropSize' 224
+
+  googleMult = [def & lrMult' 1 & decayMult' 1, -- weights
+                def & lrMult' 2 & decayMult' 0] -- biases
+  googleConv = conv & param' googleMult & biasFillerC' (constant 0.2)
+  googleLRN = lrn & localSize' 5 & alphaLRN' 0.0001 & betaLRN' 0.75
+  googlePool = maxPool & poolSize' 3 & poolStride' 2
+  googleIP n = ip n & param' googleMult
+
+  conv1 = googleConv & numOutput' 64 & pad' 3 & kernelSize' 7 & stride' 2 & weightFillerC' (xavier 0.1)
+  conv2 = googleConv & numOutput' 192 & pad' 1 & kernelSize' 3 & weightFillerC' (xavier 0.03)
+
+  topPool = avgPool & poolSize' 7 & poolStride' 1
+  topFc = googleIP 1000 & biasFillerIP' (constant 0) & weightFillerIP' (xavier 0.0)
+          -- Weird, but in Caffe replication
+          & _inner_product_param._Just.IP._weight_filler._Just._std .~ Nothing
+
+  data Inception = Inception {_1x1, _3x3reduce, _3x3, _5x5reduce, _5x5, _poolProj :: Word32}
+
+  inception :: Node -> Inception -> G LayerParameter Node
+  inception input Inception{..} = do
+    columns' <- mapM sequential columns
+    concat <- layer' concat'
+    forM_ columns' $ \(bottom, top) -> do {input >-> bottom; top >-> concat}
+    return concat
+      where
+        columns = [
+         [googleConv & numOutput' _1x1  & kernelSize' 1 & weightFillerC' (xavier 0.03), relu],
+         [googleConv & numOutput' _3x3reduce & kernelSize' 1 & weightFillerC' (xavier 0.09), relu, googleConv & numOutput' _3x3 & kernelSize' 3 & weightFillerC' (xavier 0.03) & pad' 1, relu],
+         [googleConv & numOutput' _5x5reduce & kernelSize' 1 & weightFillerC' (xavier 0.2), relu, googleConv & numOutput' _5x5 & kernelSize' 5 & weightFillerC' (xavier 0.03) & pad' 2, relu],
+         [maxPool& poolSize' 3 & poolStride' 3 & poolPad' 1, relu, googleConv & numOutput' _poolProj & kernelSize' 1 & weightFillerC' (xavier 0.1), relu]]
+
+  intermediateClassifier :: Node -> NetBuilder
+  intermediateClassifier source = do
+    (input, representation) <- sequential [pool, conv, relu, fc1, relu, dropout 0.7, fc2]
+    source >-> input
+
+    forM_ [accuracy 1, accuracy 5, softmax & _loss_weight <>~ singleton 0.3] $ attach (From representation)
+      where
+        pool = avgPool & poolSize' 5 & poolStride' 3
+        conv = googleConv & numOutput' 128 & kernelSize' 1 & weightFillerC' (xavier 0.08)
+        fc1 = googleIP 1024 & weightFillerIP' (xavier 0.02) & biasFillerIP' (constant 0.2)
+        fc2 = googleIP 1000 & weightFillerIP' (xavier 0.0009765625) & biasFillerIP' (constant 0)
+
+  data IC = I Inception | Classifier | MaxPool
+
+  googleNet = do
+    (input, initial) <- sequential [conv1, relu, googlePool, googleLRN, conv2, relu, googleLRN, googlePool]
+
+    incepted <- foldM inceptionClassifier initial [
+               I $ Inception 64 96 128 16 32 32,
+               I $ Inception 128 128 192 32 96 64,
+               MaxPool,
+               I $ Inception 192 96 208 16 48 64,
+               Classifier,
+               I $ Inception 150 112 224 24 64 64,
+               I $ Inception 128 128 256 24 64 64,
+               I $ Inception 112 144 288 32 64 64,
+               Classifier,
+               I $ Inception 256 160 320 32 128 128,
+               MaxPool,
+               I $ Inception 256 160 320 32 128 128,
+               I $ Inception 384 192 384 48 128 128]
+
+    (_, representation) <- return (incepted, incepted) >- sequential [topPool, dropout 0.4, topFc]
+
+    forM_ [accuracy 1, accuracy 5, softmax] $ attach (From representation)
+    forM_ [googleTrain, googleTest] $ attach (To input)
+      where
+        inceptionClassifier input (I inceptor) = inception input inceptor
+        inceptionClassifier input Classifier = do {intermediateClassifier input; return input}
+        inceptionClassifier input MaxPool = do {node <- layer' googlePool; input >-> node; return node}
+#+end_src
+
+*** Caffe Backend
+The Caffe backend just generates a NetState protocol buffer, and can
+be dropped in.
+
+To run, simply call
+#+begin_src haskell
+  import CaffeBackend
+
+  backend :: Net -> NetParameter
+#+end_src
+
+*** Torch Backend
+The Torch backend generates Lua code that can be imported directly
+into an existing Torch script.
+
+To run, simply call
+
+#+begin_src haskell
+  import TorchBackend
+
+  backend :: Net -> Maybe String
+#+end_src
+
+Note the =Maybe String= type - this is because we only handle graphs
+that are *linearizable* (and thus handled as an =nn.Sequential=
+container module).
+
+For an example output, the model specified as
+
+#+begin_src haskell
+  alexTrain = train & cropSize' 227 & batchSize' 256 & mirror' True
+  alexTest = test & cropSize' 227 & batchSize' 50 & mirror' False
+
+  alexConv = conv & param' alexMult & weightFillerC' (gaussian 0.01) & biasFillerC' zero
+  alexPool = maxPool & poolSize' 3
+
+  conv1 = alexConv & numOutput' 96 & kernelSize' 11 & stride' 4
+  pool1 = alexPool & poolStride' 3
+
+  model = do
+    (input', representation) <- sequential [conv1, relu, pool1]
+    forM_ [alexTrain, alexTest] $ attach (To input')
+    forM_ [accuracy 1, accuracy 5, softmax] $ attach (From representation)
+#+end_src
+
+generates the following code:
+
+#+begin_src lua
+  require("nn")
+  require("cunn")
+  local seq0 = nn.Sequential()
+  seq0:add(nn.SpatialConvolutionMM(nil, 96, 11, 11, 4, 4, 0))
+  seq0:add(nn.Threshold())
+  seq0:add(nn.SpatialMaxPooling(3, 3, 3, 3))
+  seq0:add(nn.LogSoftMax())
+  local criterion1 = nn.ClassNLLCriterion()
+  return seq0, criterion1
+#+end_src
+** Visualization Examples
+The =NN.Visualize= module provides some plotting tools. To use these,
+
+#+begin_src haskell
+  import NN.Visualize
+
+  visualize :: Net -> DotGraph Node
+  png :: FilePath -> DotGraph Node -> IO FilePath
+
+  -- For example, to visualize GoogLeNet to a file
+  file :: FilePath
+  (frontend googLeNet & visualize & png file) :: IO FilePath
+#+end_src
+
+An example output is (click for higher resolution):
+#+ATTR_HTML: :height 600px
+[[http://i.imgur.com/7n7kf9w.png][http://i.imgur.com/7n7kf9w.png]]
+** Parameter Sweeps
+To use this, write your model generation script as a Haskell file, and
+then (for example)
+#+begin_src sh
+  caffe train --model <(runhaskell Model.hs) --solver=solver.prototxt
+#+end_src
+
+To perform a parameter sweep, use the parameterizing
+#+begin_src sh
+  for model in $(runhaskell Model.hs); do
+      caffe train --model=$model --solver=solver.prototxt
+  done
+#+end_src
