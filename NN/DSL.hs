@@ -17,15 +17,15 @@ import           Gen.Caffe.PoolingParameter            as PP
 import           Gen.Caffe.PoolingParameter.PoolMethod as PP
 import           Gen.Caffe.TransformationParameter     as TP
 
-import           Data.Maybe
-
 import           Control.Lens
+import           Data.Maybe
 import           Data.Sequence
 import           Text.ProtocolBuffers                  as P
 
 import           NN.Graph
 
 type Net = Gr LayerParameter ()
+type AnnotatedNet a = Gr (LayerParameter, a) ()
 type NetBuilder = G LayerParameter ()
 
 data LayerTy = Data
@@ -92,20 +92,20 @@ backend' =  setF _data_param DP._backend
 
 -- Convolution
 setConv = setF _convolution_param
-numOutput' = setConv CP._num_output
-kernelSize' = setConv CP._kernel_size
-pad' = setConv CP._pad
-group' = setConv CP._group
-stride' = setConv CP._stride
+numOutputC' = setConv CP._num_output
+kernelSizeC' = setConv CP._kernel_size
+padC' = setConv CP._pad
+groupC' = setConv CP._group
+strideC' = setConv CP._stride
 biasFillerC' = setConv CP._bias_filler
 weightFillerC' = setConv CP._weight_filler
 
 -- Pooling
 setPool = setF _pooling_param
 pool' = setPool PP._pool
-poolSize' = setPool PP._kernel_size
-poolStride' = setPool PP._stride
-poolPad' = setPool PP._pad
+sizeP' = setPool PP._kernel_size
+strideP' = setPool PP._stride
+padP' = setPool PP._pad
 
 -- Inner Product
 setIP = setF _inner_product_param

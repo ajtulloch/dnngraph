@@ -1,5 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
-module NN.Examples.GoogLeNet(googLeNet) where
+module NN.Examples.GoogLeNet where
 
 import           Gen.Caffe.FillerParameter       as FP
 import           Gen.Caffe.InnerProductParameter as IP
@@ -10,10 +10,7 @@ import           Control.Monad
 import           Data.Sequence                   (singleton)
 import           Data.Word
 
-
-import           NN.DSL
-import           NN.Graph
-
+import           NN
 import           NN.Examples.ImageNet
 
 
@@ -24,13 +21,13 @@ googleMult = [def & lrMult' 1 & decayMult' 1, -- weights
               def & lrMult' 2 & decayMult' 0] -- biases
 googleConv = conv & param' googleMult & biasFillerC' (constant 0.2)
 googleLRN = lrn & localSize' 5 & alphaLRN' 0.0001 & betaLRN' 0.75
-googlePool = maxPool & poolSize' 3 & poolStride' 2
+googlePool = maxPool & sizeP' 3 & strideP' 2
 googleIP n = ip n & param' googleMult
 
-conv1 = googleConv & numOutput' 64 & pad' 3 & kernelSize' 7 & stride' 2 & weightFillerC' (xavier 0.1)
-conv2 = googleConv & numOutput' 192 & pad' 1 & kernelSize' 3 & weightFillerC' (xavier 0.03)
+conv1 = googleConv & numOutputC' 64 & padC' 3 & kernelSizeC' 7 & strideC' 2 & weightFillerC' (xavier 0.1)
+conv2 = googleConv & numOutputC' 192 & padC' 1 & kernelSizeC' 3 & weightFillerC' (xavier 0.03)
 
-topPool = avgPool & poolSize' 7 & poolStride' 1
+topPool = avgPool & sizeP' 7 & strideP' 1
 topFc = googleIP 1000 & biasFillerIP' (constant 0) & weightFillerIP' (xavier 0.0)
         -- Weird, but in Caffe replication
         & _inner_product_param._Just.IP._weight_filler._Just._std .~ Nothing
@@ -45,10 +42,10 @@ inception input Inception{..} = do
   return concat''
     where
       columns = [
-       [googleConv & numOutput' _1x1  & kernelSize' 1 & weightFillerC' (xavier 0.03), relu],
-       [googleConv & numOutput' _3x3reduce & kernelSize' 1 & weightFillerC' (xavier 0.09), relu, googleConv & numOutput' _3x3 & kernelSize' 3 & weightFillerC' (xavier 0.03) & pad' 1, relu],
-       [googleConv & numOutput' _5x5reduce & kernelSize' 1 & weightFillerC' (xavier 0.2), relu, googleConv & numOutput' _5x5 & kernelSize' 5 & weightFillerC' (xavier 0.03) & pad' 2, relu],
-       [maxPool& poolSize' 3 & poolStride' 3 & poolPad' 1, relu, googleConv & numOutput' _poolProj & kernelSize' 1 & weightFillerC' (xavier 0.1), relu]]
+       [googleConv & numOutputC' _1x1  & kernelSizeC' 1 & weightFillerC' (xavier 0.03), relu],
+       [googleConv & numOutputC' _3x3reduce & kernelSizeC' 1 & weightFillerC' (xavier 0.09), relu, googleConv & numOutputC' _3x3 & kernelSizeC' 3 & weightFillerC' (xavier 0.03) & padC' 1, relu],
+       [googleConv & numOutputC' _5x5reduce & kernelSizeC' 1 & weightFillerC' (xavier 0.2), relu, googleConv & numOutputC' _5x5 & kernelSizeC' 5 & weightFillerC' (xavier 0.03) & padC' 2, relu],
+       [maxPool& sizeP' 3 & strideP' 3 & padP' 1, googleConv & numOutputC' _poolProj & kernelSizeC' 1 & weightFillerC' (xavier 0.1), relu]]
 
 intermediateClassifier :: Node -> NetBuilder
 intermediateClassifier source = do
@@ -57,8 +54,8 @@ intermediateClassifier source = do
 
   forM_ [accuracy 1, accuracy 5, softmax & _loss_weight <>~ singleton 0.3] $ attach (From representation)
     where
-      pool1 = avgPool & poolSize' 5 & poolStride' 3
-      conv1' = googleConv & numOutput' 128 & kernelSize' 1 & weightFillerC' (xavier 0.08)
+      pool1 = avgPool & sizeP' 5 & strideP' 3
+      conv1' = googleConv & numOutputC' 128 & kernelSizeC' 1 & weightFillerC' (xavier 0.08)
       fc1 = googleIP 1024 & weightFillerIP' (xavier 0.02) & biasFillerIP' (constant 0.2)
       fc2 = googleIP 1000 & weightFillerIP' (xavier 0.0009765625) & biasFillerIP' (constant 0)
 
@@ -91,3 +88,6 @@ googLeNet = do
       inceptionClassifier input (I inceptor) = inception input inceptor
       inceptionClassifier input Classifier = intermediateClassifier input >> return input
       inceptionClassifier input MaxPool = do {node <- layer' googlePool; input >-> node; return node}
+
+main :: IO ()
+main = cli googLeNet

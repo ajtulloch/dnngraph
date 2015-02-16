@@ -8,10 +8,10 @@ import           Gen.Caffe.LayerParameter              as LP
 import           Gen.Caffe.PoolingParameter            as PP
 import           Gen.Caffe.PoolingParameter.PoolMethod as PP
 
+import           Control.Applicative
 import           Control.Lens
 import           Data.Graph.Inductive.Graph            hiding ((&))
 import           Data.Graph.Inductive.Query
-import           Data.Maybe
 import           Language.Lua.Syntax
 
 import           NN.Backend.Torch.Lua
@@ -19,19 +19,19 @@ import           NN.DSL
 
 -- Modules are either sequential or criterion - which are treated
 -- differently by Torch
-data Module a = Criterion a | Inner a deriving (Functor)
-data TorchModule = TorchModule Name Name [Exp]
+data Module a = Criterion a | Inner a deriving (Functor, Show)
+data TorchModule = TorchModule Name Name [Exp] deriving (Show)
 
 torchExp :: TorchModule -> Exp
-torchExp module' = PrefixExp (PEFunCall (constructModule module'))
+torchExp module' = PrefixExp (PEFunCall (construct module'))
     where
-      constructModule (TorchModule luaModule torchModule args) =
+      construct (TorchModule luaModule torchModule args) =
           NormalFunCall (PEVar (SelectName (var luaModule) torchModule)) (Args args)
 
 torchModules :: LayerParameter -> [Module TorchModule]
 torchModules lp = go (layerTy lp)
     where
-      nn name' args = Inner $ TorchModule "nn" name' (map toLua args)
+      nn name' args = Inner $ TorchModule "nn" name' (toLua <$> args)
       criterion name' = Criterion $ TorchModule "nn" name' []
       nn' name' = nn name' ([] :: [Float])
 
@@ -42,11 +42,11 @@ torchModules lp = go (layerTy lp)
             kH = kW
             dW = poolP PP._stride
             dH = dW
-            ty' = case fromJust (poolP PP._pool) of
-                   MAX -> "SpatialMaxPooling"
-                   AVE -> "SpatialAveragePooling"
+            ty' = case poolP PP._pool of
+                   Just MAX -> "SpatialMaxPooling"
+                   Just AVE -> "SpatialAveragePooling"
                    _ -> error "Unsupported Pooling Type"
-            poolP f = lp ^. LP._pooling_param ^. to fromJust ^. f
+            poolP f = lp ^. LP._pooling_param ^? _Just . f . _Just
       go Conv = [nn "SpatialConvolutionMM" [nInputPlane, nOutputPlane, kW, kH, dW, dH, padding]]
           where
             kW = convP CP._kernel_size
@@ -54,19 +54,27 @@ torchModules lp = go (layerTy lp)
             dW = convP CP._stride
             dH = dW
             padding = convP CP._pad
+            -- TODO - propagation pass to size the layers
             nInputPlane = Nothing
             nOutputPlane = convP CP._num_output
-            convP f = lp ^. LP._convolution_param ^. to fromJust ^. f
+            convP f = lp ^. LP._convolution_param ^? _Just . f . _Just
       go ReLU = [nn' "Threshold"]
-      go IP = [nn "Linear" [Nothing, Just nOutput]] where nOutput = lp ^. LP._inner_product_param ^. to fromJust ^. IP._num_output
-      go Dropout = [nn "Dropout" [ratio]] where ratio = lp ^. LP._dropout_param ^. to fromJust ^. DP._dropout_ratio
+      go IP = [nn "Linear" [nInput, nOutput]]
+          where
+            -- TODO - propagation pass to size the layers
+            nInput = Nothing
+            nOutput = lp ^. LP._inner_product_param ^? _Just  . IP._num_output . _Just
+      go Dropout = [nn "Dropout" [ratio]] where Just ratio = lp ^. LP._dropout_param ^? _Just . DP._dropout_ratio . _Just
       go SoftmaxWithLoss = [nn' "LogSoftMax", criterion "ClassNLLCriterion"]
       go ty' = error  $ "Unhandled layer type: " ++ show ty'
-
 
 torchLayers = [Pool, Conv, ReLU, IP, Dropout, SoftmaxWithLoss]
 
 -- Graph validation
+-- A graph is `sequential` if and only if
+-- - It has n-1 edges
+-- - It is connected
+-- - Every node has an out degree of zero or one.
 isSequential :: Net -> Bool
 isSequential gr = e == (n-1) && length (dff' gr) == 1 && and [l `elem` [0, 1] | i <- nodes gr, let l = (length . suc gr) i]
     where

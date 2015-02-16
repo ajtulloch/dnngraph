@@ -4,17 +4,35 @@ module NN.Visualize where
 import           Data.GraphViz
 import           Data.GraphViz.Attributes.Colors.Brewer
 import           Data.GraphViz.Attributes.Complete
-import           Data.Text.Lazy                         as L
+import qualified Data.Text.Lazy                         as L
 
+import           Data.Graph.Inductive.Graph
 import           NN.DSL
-import           NN.Graph
+
+type NetVizParams = GraphvizParams Node LayerParameter () () LayerParameter
+
+defaultNNParams =
+    nonClusteredParams {
+  -- Let's visualize neural networks from the bottom up
+  globalAttributes = [GraphAttrs [RankDir FromBottom]],
+  fmtNode = fmtLabelParameter
+}
+
+
+scaled :: (LayerParameter -> Double) -> NetVizParams
+scaled f = defaultNNParams { fmtNode = setSize }
+    where
+      setSize n@(_, lp) = fmtNode defaultNNParams n ++ [Width width', Height height']
+          where
+            width' = 0.75 * scale
+            height' = 0.5 * scale
+            scale = f lp
+
+visualizeWith :: NetVizParams -> Net -> DotGraph Node
+visualizeWith = graphToDot
 
 visualize :: Net -> DotGraph Node
-visualize = graphToDot nonClusteredParams {
-              -- Let's visualize neural networks from the bottom up
-              globalAttributes = [GraphAttrs [RankDir FromBottom]],
-              fmtNode = fmtLabelParameter
-            }
+visualize = visualizeWith defaultNNParams
 
 png :: FilePath -> DotGraph Node -> IO FilePath
 png path g = runGraphviz g Png path

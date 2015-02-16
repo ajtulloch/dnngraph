@@ -31,7 +31,7 @@ initialize = do
   seq' <- fresh "seq"
   sequential ?= seq'
 
-  statements <>= map require ["nn", "cunn"]
+  statements <>= [require "nn"]
   statements <>= [assign seq' $ torchExp (TorchModule "nn" "Sequential" [])]
       where
         require module' = funCall "require" [toLua $ L module']
@@ -57,8 +57,7 @@ finalize = do
   Just seq' <- use sequential
   criteria' <- use criteria
   statements' <- use statements
-  return $ Block statements' (Just $ map return' $ [seq'] ++ criteria')
-      where
+  return $ Block statements' (Just $ return' <$> seq':criteria')
 
 runTorch :: [LayerParameter] -> Torch Block
 runTorch layers = do
@@ -67,7 +66,7 @@ runTorch layers = do
   finalize
     where
       exps = concatMap torchExps layers
-      torchExps lp = map (fmap torchExp) (torchModules lp)
+      torchExps lp = (torchExp <$>) <$> torchModules lp
 
 lower :: [LayerParameter] -> Block
 lower layers = (evalState . _unTorch) (runTorch layers) emptyTorch

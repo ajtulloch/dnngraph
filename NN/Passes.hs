@@ -61,8 +61,8 @@ optimizeInPlaceLayer layerTy' = [updateIfInPlace, updateIfParentInPlace] where
        case (inPlaceParents gr i, F.toList (bottom lp)) of
          ([], _) -> Right lp
          (parents, bottoms) ->
-             -- TODO this is super dodgy and (presumably incorrect),
-             -- but it works for now.
+             -- TODO this is super dodgy and incorrect in the general
+             -- case (there are some weird invariants we rely on), but it works for now.
              if length parents /= length bottoms
              then Left $ printf "Must have all parents in-place for in-place optimizations" ++ show (layerName lp i)
              else let parentTops = F.concatMap (F.toList . LP.top) parents in

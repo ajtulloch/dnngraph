@@ -10,61 +10,62 @@ It consists of several parts:
   can operate in-place.
 - A set of backends to generate code for the platform.  Currently, we
   generate
-  - Caffe (with model `.prototxt`'s)
-  - Torch (code-generating Lua scripts)
-- A set of useful tools for visualizing and understanding a model
-  (visualization of network structure, parameter density)
-- A set of useful tools for generating parameterized models (for
-  example, in hyperparameter sweeps)
+  - Caffe (by generating model =prototxt= files)
+  - Torch (by generating Lua scripts)
+- A set of useful CLI tools for exporting, visualizing and
+  understanding a model (visualization of network structure, parameter
+  density)
+
+
 ** DSL Examples
 The following script generates a replica of
 https://github.com/BVLC/caffe/blob/master/models/bvlc_alexnet/train_val.prototxt.
 
 *** AlexNet
 #+begin_src haskell
+  import           Control.Lens
+  import           Control.Monad
+
+  import           NN.DSL
+  import           NN.Examples.ImageNet
+  import           NN.Graph
+
   alexTrain = train & cropSize' 227 & batchSize' 256 & mirror' True
   alexTest = test & cropSize' 227 & batchSize' 50 & mirror' False
 
   alexLrn = lrn & localSize' 5 & alphaLRN' 0.0001 & betaLRN' 0.75
   alexConv = conv & param' alexMult & weightFillerC' (gaussian 0.01) & biasFillerC' zero
   alexIP n = ip n & param' alexMult & weightFillerIP' (gaussian 0.005) & biasFillerIP' (constant 0.1)
-  alexPool = maxPool & poolSize' 3
+  alexPool = maxPool & sizeP' 3
 
   alexMult = [def & lrMult' 1 & decayMult' 1, -- weights
               def & lrMult' 2 & decayMult' 0] -- biases
 
   -- |Model
-  conv1 = alexConv & numOutput' 96 & kernelSize' 11 & stride' 4
-  pool1 = alexPool & poolStride' 3
-  conv2 = alexConv & numOutput' 256 & pad' 2 & kernelSize' 5 & group' 2
-  pool2 = alexPool & poolStride' 2
-  conv3 = alexConv & numOutput' 384 & pad' 1 & kernelSize' 3
-  conv4 = alexConv & numOutput' 384 & pad' 1 & kernelSize' 3 & group' 2 & biasFillerC' (constant 0.1)
-  conv5 = alexConv & numOutput' 256 & pad' 1 & kernelSize' 3 & group' 2 & biasFillerC' (constant 0.1)
-  pool5 = alexPool & poolStride' 2
-  ip6 = alexIP 4096
-  drop6 = dropout 0.5
-  ip7 = alexIP 4096
-  drop7 = dropout 0.5
-  ip8 = alexIP 1000 & weightFillerIP' (gaussian 0.01) & biasFillerIP' zero
+  conv1 = alexConv & numOutputC' 96 & kernelSizeC' 11 & strideC' 4
+  conv2 = alexConv & numOutputC' 256 & padC' 2 & kernelSizeC' 5 & groupC' 2
+  conv3 = alexConv & numOutputC' 384 & padC' 1 & kernelSizeC' 3
+  conv4 = alexConv & numOutputC' 384 & padC' 1 & kernelSizeC' 3 & groupC' 2 & biasFillerC' (constant 0.1)
+  conv5 = alexConv & numOutputC' 256 & padC' 1 & kernelSizeC' 3 & groupC' 2 & biasFillerC' (constant 0.1)
 
   alexNet = do
     -- Set up the model
     (input', representation) <-
         sequential [
-             conv1, relu, alexLrn, pool1,
-             conv2, relu, alexLrn, pool2,
+             -- Convolutional Layers
+             conv1, relu, alexLrn, alexPool & strideP' 3,
+             conv2, relu, alexLrn, alexPool & strideP' 2,
              conv3, relu,
              conv4, relu,
-             conv5, relu, pool5,
-             ip6, relu, drop6,
-             ip7, relu, drop7,
-             ip8]
+             conv5, relu, alexPool & strideP' 2,
+             -- FC Layers
+             alexIP 4096, relu, dropout 0.5,
+             alexIP 4096, relu, dropout 0.5,
+             alexIP 1000 & weightFillerIP' (gaussian 0.01) & biasFillerIP' zero]
 
     forM_ [alexTrain, alexTest] $ attach (To input')
     forM_ [accuracy 1, accuracy 5, softmax] $ attach (From representation)
 #+end_src
-
 
 *** GoogLeNet
 The following script generates a replica of
@@ -78,13 +79,13 @@ https://github.com/BVLC/caffe/blob/master/models/bvlc_googlenet/train_val.protot
                 def & lrMult' 2 & decayMult' 0] -- biases
   googleConv = conv & param' googleMult & biasFillerC' (constant 0.2)
   googleLRN = lrn & localSize' 5 & alphaLRN' 0.0001 & betaLRN' 0.75
-  googlePool = maxPool & poolSize' 3 & poolStride' 2
+  googlePool = maxPool & sizeP' 3 & strideP' 2
   googleIP n = ip n & param' googleMult
 
-  conv1 = googleConv & numOutput' 64 & pad' 3 & kernelSize' 7 & stride' 2 & weightFillerC' (xavier 0.1)
-  conv2 = googleConv & numOutput' 192 & pad' 1 & kernelSize' 3 & weightFillerC' (xavier 0.03)
+  conv1 = googleConv & numOutputC' 64 & padC' 3 & kernelSizeC' 7 & strideC' 2 & weightFillerC' (xavier 0.1)
+  conv2 = googleConv & numOutputC' 192 & padC' 1 & kernelSizeC' 3 & weightFillerC' (xavier 0.03)
 
-  topPool = avgPool & poolSize' 7 & poolStride' 1
+  topPool = avgPool & sizeP' 7 & strideP' 1
   topFc = googleIP 1000 & biasFillerIP' (constant 0) & weightFillerIP' (xavier 0.0)
           -- Weird, but in Caffe replication
           & _inner_product_param._Just.IP._weight_filler._Just._std .~ Nothing
@@ -99,10 +100,10 @@ https://github.com/BVLC/caffe/blob/master/models/bvlc_googlenet/train_val.protot
     return concat
       where
         columns = [
-         [googleConv & numOutput' _1x1  & kernelSize' 1 & weightFillerC' (xavier 0.03), relu],
-         [googleConv & numOutput' _3x3reduce & kernelSize' 1 & weightFillerC' (xavier 0.09), relu, googleConv & numOutput' _3x3 & kernelSize' 3 & weightFillerC' (xavier 0.03) & pad' 1, relu],
-         [googleConv & numOutput' _5x5reduce & kernelSize' 1 & weightFillerC' (xavier 0.2), relu, googleConv & numOutput' _5x5 & kernelSize' 5 & weightFillerC' (xavier 0.03) & pad' 2, relu],
-         [maxPool& poolSize' 3 & poolStride' 3 & poolPad' 1, relu, googleConv & numOutput' _poolProj & kernelSize' 1 & weightFillerC' (xavier 0.1), relu]]
+         [googleConv & numOutputC' _1x1  & kernelSizeC' 1 & weightFillerC' (xavier 0.03), relu],
+         [googleConv & numOutputC' _3x3reduce & kernelSizeC' 1 & weightFillerC' (xavier 0.09), relu, googleConv & numOutputC' _3x3 & kernelSizeC' 3 & weightFillerC' (xavier 0.03) & padC' 1, relu],
+         [googleConv & numOutputC' _5x5reduce & kernelSizeC' 1 & weightFillerC' (xavier 0.2), relu, googleConv & numOutputC' _5x5 & kernelSizeC' 5 & weightFillerC' (xavier 0.03) & padC' 2, relu],
+         [maxPool& sizeP' 3 & strideP' 3 & padP' 1, relu, googleConv & numOutputC' _poolProj & kernelSizeC' 1 & weightFillerC' (xavier 0.1), relu]]
 
   intermediateClassifier :: Node -> NetBuilder
   intermediateClassifier source = do
@@ -111,8 +112,8 @@ https://github.com/BVLC/caffe/blob/master/models/bvlc_googlenet/train_val.protot
 
     forM_ [accuracy 1, accuracy 5, softmax & _loss_weight <>~ singleton 0.3] $ attach (From representation)
       where
-        pool = avgPool & poolSize' 5 & poolStride' 3
-        conv = googleConv & numOutput' 128 & kernelSize' 1 & weightFillerC' (xavier 0.08)
+        pool = avgPool & sizeP' 5 & strideP' 3
+        conv = googleConv & numOutputC' 128 & kernelSizeC' 1 & weightFillerC' (xavier 0.08)
         fc1 = googleIP 1024 & weightFillerIP' (xavier 0.02) & biasFillerIP' (constant 0.2)
         fc2 = googleIP 1000 & weightFillerIP' (xavier 0.0009765625) & biasFillerIP' (constant 0)
 
@@ -144,34 +145,48 @@ https://github.com/BVLC/caffe/blob/master/models/bvlc_googlenet/train_val.protot
         inceptionClassifier input (I inceptor) = inception input inceptor
         inceptionClassifier input Classifier = do {intermediateClassifier input; return input}
         inceptionClassifier input MaxPool = do {node <- layer' googlePool; input >-> node; return node}
+
+  main = cli googleNet
 #+end_src
 
-*** Caffe Backend
-The Caffe backend just generates a NetState protocol buffer, and can
-be dropped in.
+** CLI Usage
+In the GoogLeNet example, above, we included the line =main = cli
+googLeNet=. This generates a CLI for our model that can be accessed
+with =runhaskell /path/to/our/model.hs=.  Currently, we can
 
-To run, simply call
-#+begin_src haskell
-  import CaffeBackend
+- export to Caffe
+- export to Torch
+- visualize the network structure.
 
-  backend :: Net -> NetParameter
-#+end_src
+For example:
+#+BEGIN_SRC 
+$ runhaskell NN/Examples/GoogLeNet.hs --help
+Usage: GoogLeNet.hs COMMAND
 
-*** Torch Backend
+Available options:
+  -h,--help                Show this help text
+
+Available commands:
+  caffe                    Generate a Caffe .prototxt to run with `caffe train
+                           --model=<>
+  torch                    Generate Lua code to be `require`'d into an existing
+                           Torch script
+  pdf                      Generate a PDF visualizing the model's connectivity
+
+$ runhaskell NN/Examples/GoogLeNet.hs caffe --output /tmp/x.prototxt
+$ runhaskell NN/Examples/GoogLeNet.hs pdf --output /tmp/x.pdf
+#+END_SRC
+
+** Caffe Backend
+The Caffe backend generates a Caffe =.prototxt= that can be run with
+=caffe train --model=<>=, without any modification necessary.
+
+** Torch Backend
 The Torch backend generates Lua code that can be imported directly
 into an existing Torch script.
 
-To run, simply call
-
-#+begin_src haskell
-  import TorchBackend
-
-  backend :: Net -> Maybe String
-#+end_src
-
-Note the =Maybe String= type - this is because we only handle graphs
-that are *linearizable* (and thus handled as an =nn.Sequential=
-container module).
+We only handle graphs that are *linearizable* (and thus handled as an
+=nn.Sequential= container module).
 
 For an example output, the model specified as
 
@@ -180,10 +195,10 @@ For an example output, the model specified as
   alexTest = test & cropSize' 227 & batchSize' 50 & mirror' False
 
   alexConv = conv & param' alexMult & weightFillerC' (gaussian 0.01) & biasFillerC' zero
-  alexPool = maxPool & poolSize' 3
+  alexPool = maxPool & sizeP' 3
 
-  conv1 = alexConv & numOutput' 96 & kernelSize' 11 & stride' 4
-  pool1 = alexPool & poolStride' 3
+  conv1 = alexConv & numOutputC' 96 & kernelSizeC' 11 & strideC' 4
+  pool1 = alexPool & strideP' 3
 
   model = do
     (input', representation) <- sequential [conv1, relu, pool1]
