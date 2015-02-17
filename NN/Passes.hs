@@ -67,7 +67,7 @@ optimizeInPlaceLayer layerTy' = [updateIfInPlace, updateIfParentInPlace] where
              then Left $ printf "Must have all parents in-place for in-place optimizations" ++ show (layerName lp i)
              else let parentTops = F.concatMap (F.toList . LP.top) parents in
                   if length parentTops == length ((F.toList . LP.bottom) lp)
-                  then Right $ lp & LP._bottom .~ (S.fromList parentTops)
+                  then Right $ lp & LP._bottom .~ S.fromList parentTops
                   else Left $ error "asdf"
 
 labelled gr = map (\ j -> (lab' (context gr j), j))
@@ -84,4 +84,3 @@ optimizeWith passes gr = foldl runPass gr passes
 
 parse :: G a b -> Gr a ()
 parse g = snd (execState g (1, empty))
-
