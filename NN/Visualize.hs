@@ -1,16 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
-module NN.Visualize where
+module NN.Visualize(visualize, visualizeWith, png, pdf, scaled, defaultNNParams) where
 
 import           Data.GraphViz
 import           Data.GraphViz.Attributes.Colors.Brewer
 import           Data.GraphViz.Attributes.Complete
 import qualified Data.Text.Lazy                         as L
+import           Gen.Caffe.LayerParameter               as LP
 
 import           Data.Graph.Inductive.Graph
 import           NN.DSL
 
 type NetVizParams = GraphvizParams Node LayerParameter () () LayerParameter
 
+defaultNNParams :: NetVizParams
 defaultNNParams =
     nonClusteredParams {
   -- Let's visualize neural networks from the bottom up

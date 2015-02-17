@@ -1,0 +1,117 @@
+name:                caffegraph
+version:             0.1.0.2
+description:         A compiler for building, optimizing, visualizing, and generating (Caffe/Torch) DNNs
+license:             BSD3
+license-file:        LICENSE
+author:              Andrew Tulloch
+maintainer:          andrew@tullo.ch
+homepage:            https://github.com/ajtulloch/caffegraph/
+category:            Math
+build-type:          Simple
+-- extra-source-files:  
+cabal-version:       >=1.10
+source-repository head
+  type:     git
+  location: https://github.com/ajtulloch/caffegraph/
+
+Library
+  GHC-Options: -Wall
+  Hs-Source-Dirs: .
+  exposed-modules: NN, 
+                   NN.Backend.Caffe
+                   NN.Backend.Torch.Codegen
+                   NN.Backend.Torch.Lua
+                   NN.Backend.Torch.Torch
+                   NN.Backend.Torch
+                   NN.CLI
+                   NN.DSL
+                   NN.Examples.AlexNet
+                   NN.Examples.Demo
+                   NN.Examples.GoogLeNet
+                   NN.Examples.ImageNet
+                   NN.Examples.MLPSweep
+                   NN.Graph
+                   NN.Passes
+                   NN.Visualize
+                   Gen.Caffe.AccuracyParameter,
+                   Gen.Caffe.ArgMaxParameter,
+                   Gen.Caffe.BlobProto,
+                   Gen.Caffe.BlobProtoVector,
+                   Gen.Caffe.ConcatParameter,
+                   Gen.Caffe.ContrastiveLossParameter,
+                   Gen.Caffe.ConvolutionParameter.Engine,
+                   Gen.Caffe.ConvolutionParameter,
+                   Gen.Caffe.DataParameter.DB,
+                   Gen.Caffe.DataParameter,
+                   Gen.Caffe.Datum,
+                   Gen.Caffe.DropoutParameter,
+                   Gen.Caffe.DummyDataParameter,
+                   Gen.Caffe.EltwiseParameter.EltwiseOp,
+                   Gen.Caffe.EltwiseParameter,
+                   Gen.Caffe.ExpParameter,
+                   Gen.Caffe.FillerParameter,
+                   Gen.Caffe.HDF5DataParameter,
+                   Gen.Caffe.HDF5OutputParameter,
+                   Gen.Caffe.HingeLossParameter.Norm,
+                   Gen.Caffe.HingeLossParameter,
+                   Gen.Caffe.ImageDataParameter,
+                   Gen.Caffe.InfogainLossParameter,
+                   Gen.Caffe.InnerProductParameter,
+                   Gen.Caffe.LayerParameter,
+                   Gen.Caffe.LossParameter,
+                   Gen.Caffe.LRNParameter.NormRegion,
+                   Gen.Caffe.LRNParameter,
+                   Gen.Caffe.MemoryDataParameter,
+                   Gen.Caffe.MVNParameter,
+                   Gen.Caffe.NetParameter,
+                   Gen.Caffe.NetState,
+                   Gen.Caffe.NetStateRule,
+                   Gen.Caffe.ParamSpec.DimCheckMode,
+                   Gen.Caffe.ParamSpec,
+                   Gen.Caffe.Phase,
+                   Gen.Caffe.PoolingParameter.Engine,
+                   Gen.Caffe.PoolingParameter.PoolMethod,
+                   Gen.Caffe.PoolingParameter,
+                   Gen.Caffe.PowerParameter,
+                   Gen.Caffe.ReLUParameter.Engine,
+                   Gen.Caffe.ReLUParameter,
+                   Gen.Caffe.SigmoidParameter.Engine,
+                   Gen.Caffe.SigmoidParameter,
+                   Gen.Caffe.SliceParameter,
+                   Gen.Caffe.SoftmaxParameter.Engine,
+                   Gen.Caffe.SoftmaxParameter,
+                   Gen.Caffe.SolverParameter.SolverMode,
+                   Gen.Caffe.SolverParameter.SolverType,
+                   Gen.Caffe.SolverParameter,
+                   Gen.Caffe.SolverState,
+                   Gen.Caffe.TanHParameter.Engine,
+                   Gen.Caffe.TanHParameter,
+                   Gen.Caffe.ThresholdParameter,
+                   Gen.Caffe.TransformationParameter,
+                   Gen.Caffe.V0LayerParameter.PoolMethod,
+                   Gen.Caffe.V0LayerParameter,
+                   Gen.Caffe.V1LayerParameter.DimCheckMode,
+                   Gen.Caffe.V1LayerParameter.LayerType,
+                   Gen.Caffe.V1LayerParameter,
+                   Gen.Caffe.WindowDataParameter,
+                   Gen.Caffe
+
+  build-depends:       base >=4.7 && <4.8
+                     , bytestring
+                     , containers
+                     , fgl
+                     , filepath
+                     , graphviz
+                     , language-lua
+                     , lens
+                     , mtl
+                     , process
+                     , protocol-buffers
+                     , protocol-buffers-descriptor
+                     , template-haskell
+                     , temporary
+                     , optparse-applicative
+                     , text
+                     , ihaskell
+                     , ihaskell-magic
+  default-language:    Haskell2010

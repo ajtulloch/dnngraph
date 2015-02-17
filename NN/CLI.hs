@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 module NN.CLI where
 
 import           Control.Applicative
@@ -30,22 +31,24 @@ torchCode net path = do
   let Just code = parse net & Torch.backend
   writeFile path code
 
-data Command = Caffe String String | Torch String | PDF String
-
-filename = strOption (long "output" <> help "Write output to FILE" <> metavar "FILE")
-binaryToText = strOption (long "binary_to_text"
-                          <> help "Path to binary_to_text.py BINARY"
-                          <> showDefault
-                          <> metavar "BINARY"
-                          <> value "./binary_to_text.py")
+data Command = Caffe { _fileName, _binaryToText :: String}
+             | Torch { _fileName :: String }
+             | PDF { _fileName :: String }
+makeLenses ''Command
 
 opts :: Parser Command
 opts = subparser (caffe <> torch <> pdf')
        where
          nc name parser desc = command name (info (helper <*> parser) (progDesc desc))
-         caffe = nc "caffe" (Caffe <$> filename <*> binaryToText) "Generate a Caffe .prototxt to run with `caffe train --model=<>"
-         torch = nc "torch" (Torch <$> filename) "Generate Lua code to be `require`'d into an existing Torch script"
-         pdf' = nc "pdf" (PDF <$> filename) "Generate a PDF visualizing the model's connectivity"
+         caffe = nc "caffe" (Caffe <$> fileName' <*> binaryToText') "Generate a Caffe .prototxt to run with `caffe train --model=<>"
+         torch = nc "torch" (Torch <$> fileName') "Generate Lua code to be `require`'d into an existing Torch script"
+         pdf' = nc "pdf" (PDF <$> fileName') "Generate a PDF visualizing the model's connectivity"
+         fileName' = strOption (long "output" <> help "Write output to FILE" <> metavar "FILE")
+         binaryToText' = strOption (long "binary_to_text"
+                                   <> help "Path to binary_to_text.py BINARY"
+                                   <> showDefault
+                                   <> metavar "BINARY"
+                                   <> value "./binary_to_text.py")
 
 run :: NetBuilder -> Command -> IO ()
 run net (Caffe prototxtPath binaryToTextPath) = caffePrototxt net prototxtPath binaryToTextPath
@@ -54,4 +57,3 @@ run net (PDF path) = netPdf net path
 
 cli :: NetBuilder -> IO ()
 cli net = execParser (info (helper <*> opts) idm) >>= run net
-

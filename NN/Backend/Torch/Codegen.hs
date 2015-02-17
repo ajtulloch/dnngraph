@@ -7,13 +7,13 @@ module NN.Backend.Torch.Codegen where
 import           Control.Applicative
 import           Control.Lens               hiding (assign)
 import           Control.Monad.State.Strict
+import           Gen.Caffe.LayerParameter   as LP
 import           Language.Lua.PrettyPrinter
 import           Language.Lua.Syntax
 import           Text.Printf
 
 import           NN.Backend.Torch.Lua
 import           NN.Backend.Torch.Torch
-import           NN.DSL
 
 data TorchState = TorchState {
       _statements :: [Stat],

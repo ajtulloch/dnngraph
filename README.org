@@ -16,7 +16,7 @@ It consists of several parts:
   understanding a model (visualization of network structure, parameter
   density)
 
-
+For a guided example, see a [[http://bit.ly/17kDYze][demonstration IHaskell Notebook]].
 ** DSL Examples
 The following script generates a replica of
 https://github.com/BVLC/caffe/blob/master/models/bvlc_alexnet/train_val.prototxt.

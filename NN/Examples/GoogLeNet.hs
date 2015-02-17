@@ -1,5 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
-module NN.Examples.GoogLeNet where
+{-# OPTIONS_GHC -fno-warn-missing-signatures #-}
+module NN.Examples.GoogLeNet(googLeNet, main) where
 
 import           Gen.Caffe.FillerParameter       as FP
 import           Gen.Caffe.InnerProductParameter as IP
@@ -62,6 +63,7 @@ intermediateClassifier source = do
 -- What to do at each step in the inner column?
 data ColumnStep = I Inception | Classifier | MaxPool
 
+googLeNet :: NetBuilder
 googLeNet = do
   (input, initial) <- sequential [conv1, relu, googlePool, googleLRN, conv2, relu, googleLRN, googlePool]
 
@@ -80,7 +82,7 @@ googLeNet = do
              I $ Inception 256 160 320 32 128 128,
              I $ Inception 384 192 384 48 128 128]
 
-  (_, representation) <- return (incepted, incepted) >- sequential [topPool, dropout 0.4, topFc]
+  (_, representation) <- with incepted >- sequential [topPool, dropout 0.4, topFc]
 
   forM_ [accuracy 1, accuracy 5, softmax] $ attach (From representation)
   forM_ [googleTrain, googleTest] $ attach (To input)

@@ -18,7 +18,6 @@ import           NN.DSL
 import           NN.Graph
 import           NN.Passes
 
-
 -- A simple example of performing a parameter sweep over the number of
 -- hidden units in an MLP.
 parameterSweepMLP :: Int -> IO ([Word32], Maybe Float)

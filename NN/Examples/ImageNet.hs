@@ -1,8 +1,8 @@
 module NN.Examples.ImageNet(test, train) where
 
-import           Gen.Caffe.DataParameter.DB as DP
-
 import           Control.Lens
+import           Gen.Caffe.DataParameter.DB as DP
+import           Gen.Caffe.Phase            as P
 
 import           NN.DSL
 

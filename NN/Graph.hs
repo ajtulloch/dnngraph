@@ -11,6 +11,9 @@ type G a = State (Node, Gr a ())
 sequential :: [a] -> G a (Node, Node)
 sequential = stack . map layer
 
+with :: Node -> G a (Node, Node)
+with a = return (a, a)
+
 layer :: a -> G a (Node, Node)
 layer l = do
   gid <- layer' l

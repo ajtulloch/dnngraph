@@ -1,10 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
-module NN.DSL(module NN.DSL, P.Phase(..), DP.DB(..), LP.LayerParameter) where
+{-# OPTIONS_GHC -fno-warn-missing-signatures #-}
+module NN.DSL(module NN.DSL) where
 
 import           Gen.Caffe.AccuracyParameter           as AP
 import           Gen.Caffe.ConvolutionParameter        as CP
 import           Gen.Caffe.DataParameter               as DP
-import           Gen.Caffe.DataParameter.DB            as DP
 import           Gen.Caffe.DropoutParameter            as DP
 import           Gen.Caffe.FillerParameter             as FP
 import           Gen.Caffe.InnerProductParameter       as IP

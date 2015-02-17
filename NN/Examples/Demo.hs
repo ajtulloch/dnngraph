@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module NN.Examples.Demo where
+module NN.Examples.Demo(NN.Examples.Demo.main) where
 
 import           Gen.Caffe.LayerParameter as LP
 import           Gen.Caffe.NetParameter   as NP
@@ -35,9 +35,9 @@ visualizeGoogLeNet = do
   _ <- system $ printf "open %s &" f
   return ()
 
-visualizeGoogLeNetDensity :: IO ()
-visualizeGoogLeNetDensity = do
-  (file, handle) <- openTempFile "/tmp" "graph.pdf"
+visualizeGoogLeNetScaled :: IO ()
+visualizeGoogLeNetScaled = do
+  (file, handle) <- openTempFile "/tmp" "graphScaled.pdf"
   hClose handle
   f <- parse googLeNet & visualizeWith (scaled downscaleReLU) & pdf file
   _ <- system $ printf "open %s &" f
@@ -47,3 +47,10 @@ visualizeGoogLeNetDensity = do
             where
               go ReLU = 1
               go _ = 2
+
+main :: IO ()
+main = do
+  torch
+  caffe
+  visualizeGoogLeNet
+  visualizeGoogLeNetScaled

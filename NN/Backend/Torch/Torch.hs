@@ -68,6 +68,7 @@ torchModules lp = go (layerTy lp)
       go SoftmaxWithLoss = [nn' "LogSoftMax", criterion "ClassNLLCriterion"]
       go ty' = error  $ "Unhandled layer type: " ++ show ty'
 
+torchLayers :: [LayerTy]
 torchLayers = [Pool, Conv, ReLU, IP, Dropout, SoftmaxWithLoss]
 
 -- Graph validation
