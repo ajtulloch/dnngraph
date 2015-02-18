@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 module NN.Backend.Torch.Torch where
 
+import           Data.Word
 import           Gen.Caffe.ConvolutionParameter        as CP
 import           Gen.Caffe.DropoutParameter            as DP
 import           Gen.Caffe.InnerProductParameter       as IP
@@ -28,6 +29,10 @@ torchExp module' = PrefixExp (PEFunCall (construct module'))
       construct (TorchModule luaModule torchModule args) =
           NormalFunCall (PEVar (SelectName (var luaModule) torchModule)) (Args args)
 
+convolutionImpl :: Maybe Word32 -> String
+convolutionImpl Nothing = "SpatialConvolutionMM"
+convolutionImpl (Just kW) = if kW > 5 then "SpatialConvolutionFFT" else "SpatialConvolutionMM"
+
 torchModules :: LayerParameter -> [Module TorchModule]
 torchModules lp = go (layerTy lp)
     where
@@ -47,7 +52,7 @@ torchModules lp = go (layerTy lp)
                    Just AVE -> "SpatialAveragePooling"
                    _ -> error "Unsupported Pooling Type"
             poolP f = lp ^. LP._pooling_param ^? _Just . f . _Just
-      go Conv = [nn "SpatialConvolutionMM" [nInputPlane, nOutputPlane, kW, kH, dW, dH, padding]]
+      go Conv = [nn (convolutionImpl kW) [nInputPlane, nOutputPlane, kW, kH, dW, dH, padding]]
           where
             kW = convP CP._kernel_size
             kH = kW
