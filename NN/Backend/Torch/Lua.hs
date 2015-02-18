@@ -26,6 +26,9 @@ instance (ToLua a) => ToLua (Maybe a) where
 assign :: Name -> Exp -> Stat
 assign lval exp' = LocalAssign [lval] (Just [exp'])
 
+require :: Name -> Stat
+require module' = funCall "require" [toLua $ L module']
+
 funCall :: Name -> [Exp] -> Stat
 funCall name' args = FunCall (NormalFunCall (var name') (Args args))
 
@@ -37,3 +40,6 @@ return' name' = PrefixExp (var name')
 
 var :: Name -> PrefixExp
 var name' = PEVar (VarName name')
+
+var' :: Name -> Exp
+var' name' = PrefixExp (var name')

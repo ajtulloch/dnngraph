@@ -1,10 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
-module NN.Examples.Demo(NN.Examples.Demo.main) where
-
-import           Gen.Caffe.LayerParameter as LP
-import           Gen.Caffe.NetParameter   as NP
+module NN.Examples.Demo where
 
 import           Control.Lens
+import           Gen.Caffe.LayerParameter as LP
+import           Gen.Caffe.NetParameter   as NP
 import           GHC.IO.Handle
 import           System.IO.Temp
 import           System.Process
@@ -13,8 +12,11 @@ import           Text.Printf
 import           NN
 import           NN.Backend.Caffe         as Caffe
 import           NN.Backend.Torch         as Torch
+import           NN.Backend.Torch.Flat
+import           NN.Backend.Torch.Torch   as Torch
 import           NN.Examples.AlexNet
 import           NN.Examples.GoogLeNet
+import           NN.Graph                 as Graph
 
 caffe :: IO ()
 caffe = do
@@ -24,14 +26,36 @@ caffe = do
 
 torch :: IO ()
 torch = do
-  let Just output = parse alexNetSmall & Torch.backend
-  putStr $ output ++ "\n"
+  print $ parse alexNetSmall & clean & expand'
+  print $ parse alexNetSmall & clean & flattenStructure
+  let Just s' = parse alexNet & Torch.backend
+  putStr s'
+  return ()
 
-visualizeGoogLeNet :: IO ()
-visualizeGoogLeNet = do
+torchFancy :: IO ()
+torchFancy = do
+  let gr = do
+        x <- layer' relu
+        (_, y) <- with x >- sequential [conv, relu, maxPool, conv, relu, maxPool]
+        (_, z) <- with x >- Graph.layer conv
+        concat'' <- layer' concat'
+
+        y >-> concat''
+        z >-> concat''
+        _ <- with concat'' >- Graph.layer softmax
+        return ()
+  print $ parse gr & clean & expand'
+  print $ parse gr & clean & flattenStructure
+  visualize' gr
+  let Just str = parse gr & Torch.backend
+  putStr str
+  return ()
+
+visualize' :: NetBuilder -> IO ()
+visualize' g = do
   (file, handle) <- openTempFile "/tmp" "graph.pdf"
   hClose handle
-  f <- parse googLeNet & visualize & pdf file
+  f <- parse g & visualize & pdf file
   _ <- system $ printf "open %s &" f
   return ()
 
@@ -39,7 +63,7 @@ visualizeGoogLeNetScaled :: IO ()
 visualizeGoogLeNetScaled = do
   (file, handle) <- openTempFile "/tmp" "graphScaled.pdf"
   hClose handle
-  f <- parse googLeNet & visualizeWith (scaled downscaleReLU) & pdf file
+  f <- parse alexNetSmall & visualizeWith (scaled downscaleReLU) & pdf file
   _ <- system $ printf "open %s &" f
   return ()
       where
@@ -52,5 +76,4 @@ main :: IO ()
 main = do
   torch
   caffe
-  visualizeGoogLeNet
   visualizeGoogLeNetScaled

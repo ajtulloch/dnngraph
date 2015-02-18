@@ -1,4 +1,5 @@
-{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFunctor   #-}
+{-# LANGUAGE TemplateHaskell #-}
 module NN.Backend.Torch.Torch where
 
 import           Data.Word
@@ -12,8 +13,7 @@ import           Gen.Caffe.PoolingParameter.PoolMethod as PP
 import           Control.Applicative
 import           Control.Lens
 import           Data.Graph.Inductive.Graph            hiding ((&))
-import           Data.Graph.Inductive.Query
-import           Language.Lua.Syntax
+import           Language.Lua.Syntax                   hiding (Concat)
 
 import           NN.Backend.Torch.Lua
 import           NN.DSL
@@ -22,6 +22,12 @@ import           NN.DSL
 -- differently by Torch
 data Module a = Criterion a | Inner a deriving (Functor, Show)
 data TorchModule = TorchModule Name Name [Exp] deriving (Show)
+
+inners :: [Module a] -> [a]
+inners xs = [a | Inner a <- xs]
+
+criteria :: [Module a] -> [a]
+criteria xs = [a | Criterion a <- xs]
 
 torchExp :: TorchModule -> Exp
 torchExp module' = PrefixExp (PEFunCall (construct module'))
@@ -71,27 +77,14 @@ torchModules lp = go (layerTy lp)
             nOutput = lp ^. LP._inner_product_param ^? _Just  . IP._num_output . _Just
       go Dropout = [nn "Dropout" [ratio]] where Just ratio = lp ^. LP._dropout_param ^? _Just . DP._dropout_ratio . _Just
       go SoftmaxWithLoss = [nn' "LogSoftMax", criterion "ClassNLLCriterion"]
+      go Concat = [] -- Handled by flattening implementation
       go ty' = error  $ "Unhandled layer type: " ++ show ty'
 
 torchLayers :: [LayerTy]
-torchLayers = [Pool, Conv, ReLU, IP, Dropout, SoftmaxWithLoss]
-
--- Graph validation
--- A graph is `sequential` if and only if
--- - It has n-1 edges
--- - It is connected
--- - Every node has an out degree of zero or one.
-isSequential :: Net -> Bool
-isSequential gr = e == (n-1) && length (dff' gr) == 1 && and [l `elem` [0, 1] | i <- nodes gr, let l = (length . suc gr) i]
-    where
-      e = length (edges gr)
-      n = length (nodes gr)
+torchLayers = [Pool, Conv, ReLU, IP, Dropout, SoftmaxWithLoss, Concat]
 
 clean :: Net -> Net
 clean gr = foldl (flip delNode) gr toDelete
     where
       toDelete = filter (\n -> layerTy (label n) `notElem` torchLayers) (nodes gr)
       label n = lab' (context gr n)
-
-linearize :: Net -> Maybe [LayerParameter]
-linearize gr = if isSequential gr then Just (topsort' gr) else Nothing

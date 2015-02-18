@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
-module NN.Examples.GoogLeNet(googLeNet, main) where
+module NN.Examples.GoogLeNet where
 
 import           Gen.Caffe.FillerParameter       as FP
 import           Gen.Caffe.InnerProductParameter as IP

@@ -22,6 +22,7 @@ Library
                    NN.Backend.Torch.Codegen
                    NN.Backend.Torch.Lua
                    NN.Backend.Torch.Torch
+                   NN.Backend.Torch.Flat
                    NN.Backend.Torch
                    NN.CLI
                    NN.DSL

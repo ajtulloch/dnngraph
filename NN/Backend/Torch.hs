@@ -1,10 +1,12 @@
-module NN.Backend.Torch(NN.Backend.Torch.backend) where
-
-import           Control.Applicative
+module NN.Backend.Torch where
 
 import           NN.Backend.Torch.Codegen
+import           NN.Backend.Torch.Flat
 import           NN.Backend.Torch.Torch
 import           NN.DSL
 
 backend :: Net -> Maybe String
-backend  = (codegen . lower <$>) . linearize . clean
+backend gr = do
+  flat <- flatten' $ clean gr
+  return $ codegen $ lower flat
+
