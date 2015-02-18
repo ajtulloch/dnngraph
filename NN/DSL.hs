@@ -26,7 +26,7 @@ import           NN.Graph
 
 type Net = Gr LayerParameter ()
 type AnnotatedNet a = Gr (LayerParameter, a) ()
-type NetBuilder = G LayerParameter ()
+type NetBuilder a = G LayerParameter a
 
 data LayerTy = Data
              | Pool
@@ -93,6 +93,7 @@ backend' =  setF _data_param DP._backend
 -- Convolution
 setConv = setF _convolution_param
 numOutputC' = setConv CP._num_output
+numInputC' = setConv CP._num_input
 kernelSizeC' = setConv CP._kernel_size
 padC' = setConv CP._pad
 groupC' = setConv CP._group
@@ -110,6 +111,7 @@ padP' = setPool PP._pad
 -- Inner Product
 setIP = setF _inner_product_param
 weightFillerIP' = setIP IP._weight_filler
+numInputIP' = setIP IP._num_input
 numOutputIP' = setIP IP._num_output
 biasFillerIP' = setIP IP._bias_filler
 

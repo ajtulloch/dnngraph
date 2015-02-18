@@ -72,6 +72,21 @@ The following script generates a replica of
 https://github.com/BVLC/caffe/blob/master/models/bvlc_googlenet/train_val.prototxt
 
 #+begin_src haskell
+  module NN.Examples.GoogLeNet where
+
+  import           Gen.Caffe.FillerParameter       as FP
+  import           Gen.Caffe.InnerProductParameter as IP
+  import           Gen.Caffe.LayerParameter        as LP
+
+  import           Control.Lens
+  import           Control.Monad
+  import           Data.Sequence                   (singleton)
+  import           Data.Word
+
+  import           NN
+  import           NN.Examples.ImageNet
+
+
   googleTrain = train & mirror' True & batchSize' 32 & cropSize' 224
   googleTest = test & mirror' False & batchSize' 50 & cropSize' 224
 
@@ -92,37 +107,51 @@ https://github.com/BVLC/caffe/blob/master/models/bvlc_googlenet/train_val.protot
 
   data Inception = Inception {_1x1, _3x3reduce, _3x3, _5x5reduce, _5x5, _poolProj :: Word32}
 
-  inception :: Node -> Inception -> G LayerParameter Node
+  inception :: Node -> Inception -> NetBuilder Node
   inception input Inception{..} = do
     columns' <- mapM sequential columns
-    concat <- layer' concat'
-    forM_ columns' $ \(bottom, top) -> do {input >-> bottom; top >-> concat}
-    return concat
+    concat'' <- layer' concat'
+    forM_ columns' $ \(bottom, top) -> do
+                                    input >-> bottom
+                                    top >-> concat''
+    return concat''
       where
         columns = [
          [googleConv & numOutputC' _1x1  & kernelSizeC' 1 & weightFillerC' (xavier 0.03), relu],
          [googleConv & numOutputC' _3x3reduce & kernelSizeC' 1 & weightFillerC' (xavier 0.09), relu, googleConv & numOutputC' _3x3 & kernelSizeC' 3 & weightFillerC' (xavier 0.03) & padC' 1, relu],
          [googleConv & numOutputC' _5x5reduce & kernelSizeC' 1 & weightFillerC' (xavier 0.2), relu, googleConv & numOutputC' _5x5 & kernelSizeC' 5 & weightFillerC' (xavier 0.03) & padC' 2, relu],
-         [maxPool& sizeP' 3 & strideP' 3 & padP' 1, relu, googleConv & numOutputC' _poolProj & kernelSizeC' 1 & weightFillerC' (xavier 0.1), relu]]
+         [maxPool& sizeP' 3 & strideP' 3 & padP' 1, googleConv & numOutputC' _poolProj & kernelSizeC' 1 & weightFillerC' (xavier 0.1), relu]]
 
-  intermediateClassifier :: Node -> NetBuilder
+  intermediateClassifier :: Node -> NetBuilder ()
   intermediateClassifier source = do
-    (input, representation) <- sequential [pool, conv, relu, fc1, relu, dropout 0.7, fc2]
+    (input, representation) <- sequential [pool1, conv1', relu, fc1, relu, dropout 0.7, fc2]
     source >-> input
 
     forM_ [accuracy 1, accuracy 5, softmax & _loss_weight <>~ singleton 0.3] $ attach (From representation)
       where
-        pool = avgPool & sizeP' 5 & strideP' 3
-        conv = googleConv & numOutputC' 128 & kernelSizeC' 1 & weightFillerC' (xavier 0.08)
+        pool1 = avgPool & sizeP' 5 & strideP' 3
+        conv1' = googleConv & numOutputC' 128 & kernelSizeC' 1 & weightFillerC' (xavier 0.08)
         fc1 = googleIP 1024 & weightFillerIP' (xavier 0.02) & biasFillerIP' (constant 0.2)
         fc2 = googleIP 1000 & weightFillerIP' (xavier 0.0009765625) & biasFillerIP' (constant 0)
 
-  data IC = I Inception | Classifier | MaxPool
+  -- What to do at each row in the inner column?
+  data Row = I Inception | Classifier | MaxPool
 
-  googleNet = do
+  insertRow :: Node -> Row -> NetBuilder Node
+  insertRow input (I inceptor) = inception input inceptor
+  insertRow input Classifier = do
+    intermediateClassifier input
+    return input
+  insertRow input MaxPool = do
+    node <- layer' googlePool
+    input >-> node
+    return node
+
+  googLeNet :: NetBuilder ()
+  googLeNet = do
     (input, initial) <- sequential [conv1, relu, googlePool, googleLRN, conv2, relu, googleLRN, googlePool]
 
-    incepted <- foldM inceptionClassifier initial [
+    top <- foldM insertRow initial [
                I $ Inception 64 96 128 16 32 32,
                I $ Inception 128 128 192 32 96 64,
                MaxPool,
@@ -137,16 +166,13 @@ https://github.com/BVLC/caffe/blob/master/models/bvlc_googlenet/train_val.protot
                I $ Inception 256 160 320 32 128 128,
                I $ Inception 384 192 384 48 128 128]
 
-    (_, representation) <- return (incepted, incepted) >- sequential [topPool, dropout 0.4, topFc]
+    (_, representation) <- with top >- sequential [topPool, dropout 0.4, topFc]
 
     forM_ [accuracy 1, accuracy 5, softmax] $ attach (From representation)
     forM_ [googleTrain, googleTest] $ attach (To input)
-      where
-        inceptionClassifier input (I inceptor) = inception input inceptor
-        inceptionClassifier input Classifier = do {intermediateClassifier input; return input}
-        inceptionClassifier input MaxPool = do {node <- layer' googlePool; input >-> node; return node}
 
-  main = cli googleNet
+  main :: IO ()
+  main = cli googLeNet
 #+end_src
 
 ** CLI Usage
@@ -185,8 +211,9 @@ The Caffe backend generates a Caffe =.prototxt= that can be run with
 The Torch backend generates Lua code that can be imported directly
 into an existing Torch script.
 
-We only handle graphs that are *linearizable* (and thus handled as an
-=nn.Sequential= container module).
+Anything network that can be expressed as a nested combination of
+computational layers, combined with =nn.Sequential=, =nn.Concat=,
+=nn.ModelParallel=, =nn.DataParallel= etc can be generated under this framework.
 
 For an example output, the model specified as
 
@@ -219,6 +246,73 @@ generates the following code:
   local criterion1 = nn.ClassNLLCriterion()
   return seq0, criterion1
 #+end_src
+
+For a more complicated example, the network specified as
+
+#+begin_src haskell
+  do
+    x <- layer' relu
+    (_, y) <- with x >- sequential [conv, relu, maxPool, conv, relu]
+    (_, z) <- with x >- sequential [conv, relu, maxPool, conv, relu]
+    concat'' <- layer' concat'
+
+    y >-> concat''
+    z >-> concat''
+    _ <- with concat'' >- sequential [ip 4096, relu, dropout 0.5, ip 1000, softmax]
+    return ()
+#+end_src
+
+that looks like
+
+#+ATTR_HTML: :height 600px
+[[http://i.imgur.com/dsqgYna.png][http://i.imgur.com/dsqgYna.png]]
+
+will generate
+#+begin_src lua
+require("nn")
+local seq0 = nn.Sequential()
+local mod1 = nn.Threshold()
+seq0:add(mod1)
+local concat2 = nn.DepthConcat()
+local seq3 = nn.Sequential()
+local mod4 = nn.SpatialConvolutionMM(nil, nil, nil, nil, 1, 1, 0)
+seq3:add(mod4)
+local mod5 = nn.Threshold()
+seq3:add(mod5)
+local mod6 = nn.SpatialMaxPooling(nil, nil, 1, 1)
+seq3:add(mod6)
+local mod7 = nn.SpatialConvolutionMM(nil, nil, nil, nil, 1, 1, 0)
+seq3:add(mod7)
+local mod8 = nn.Threshold()
+seq3:add(mod8)
+concat2:add(seq3)
+local seq9 = nn.Sequential()
+local mod10 = nn.SpatialConvolutionMM(nil, nil, nil, nil, 1, 1, 0)
+seq9:add(mod10)
+local mod11 = nn.Threshold()
+seq9:add(mod11)
+local mod12 = nn.SpatialMaxPooling(nil, nil, 1, 1)
+seq9:add(mod12)
+local mod13 = nn.SpatialConvolutionMM(nil, nil, nil, nil, 1, 1, 0)
+seq9:add(mod13)
+local mod14 = nn.Threshold()
+seq9:add(mod14)
+concat2:add(seq9)
+seq0:add(concat2)
+local mod15 = nn.Linear(nil, 4096)
+seq0:add(mod15)
+local mod16 = nn.Threshold()
+seq0:add(mod16)
+local mod17 = nn.Dropout(0.5)
+seq0:add(mod17)
+local mod18 = nn.Linear(nil, 1000)
+seq0:add(mod18)
+local mod19 = nn.LogSoftMax()
+seq0:add(mod19)
+local criteria20 = nn.ClassNLLCriterion()
+return seq0, criteria20
+#+end_src
+
 ** Visualization Examples
 The =NN.Visualize= module provides some plotting tools. To use these,
 

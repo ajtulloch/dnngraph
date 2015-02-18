@@ -25,13 +25,13 @@ conv3 = alexConv & numOutputC' 384 & padC' 1 & kernelSizeC' 3
 conv4 = alexConv & numOutputC' 384 & padC' 1 & kernelSizeC' 3 & groupC' 2 & biasFillerC' (constant 0.1)
 conv5 = alexConv & numOutputC' 256 & padC' 1 & kernelSizeC' 3 & groupC' 2 & biasFillerC' (constant 0.1)
 
-alexNetSmall :: NetBuilder
+alexNetSmall :: NetBuilder ()
 alexNetSmall = do
   (input', representation) <- sequential [conv1, relu, alexPool & strideP' 3]
   forM_ [alexTrain, alexTest] $ attach (To input')
   forM_ [accuracy 1, accuracy 5, softmax] $ attach (From representation)
 
-alexNet :: NetBuilder
+alexNet :: NetBuilder ()
 alexNet = do
   -- Set up the model
   (input', representation) <-

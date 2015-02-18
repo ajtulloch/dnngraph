@@ -35,11 +35,13 @@ topFc = googleIP 1000 & biasFillerIP' (constant 0) & weightFillerIP' (xavier 0.0
 
 data Inception = Inception {_1x1, _3x3reduce, _3x3, _5x5reduce, _5x5, _poolProj :: Word32}
 
-inception :: Node -> Inception -> G LayerParameter Node
+inception :: Node -> Inception -> NetBuilder Node
 inception input Inception{..} = do
   columns' <- mapM sequential columns
   concat'' <- layer' concat'
-  forM_ columns' $ \(bottom, top) -> input >-> bottom >> top >-> concat''
+  forM_ columns' $ \(bottom, top) -> do
+                                  input >-> bottom
+                                  top >-> concat''
   return concat''
     where
       columns = [
@@ -48,7 +50,7 @@ inception input Inception{..} = do
        [googleConv & numOutputC' _5x5reduce & kernelSizeC' 1 & weightFillerC' (xavier 0.2), relu, googleConv & numOutputC' _5x5 & kernelSizeC' 5 & weightFillerC' (xavier 0.03) & padC' 2, relu],
        [maxPool& sizeP' 3 & strideP' 3 & padP' 1, googleConv & numOutputC' _poolProj & kernelSizeC' 1 & weightFillerC' (xavier 0.1), relu]]
 
-intermediateClassifier :: Node -> NetBuilder
+intermediateClassifier :: Node -> NetBuilder ()
 intermediateClassifier source = do
   (input, representation) <- sequential [pool1, conv1', relu, fc1, relu, dropout 0.7, fc2]
   source >-> input
@@ -60,14 +62,24 @@ intermediateClassifier source = do
       fc1 = googleIP 1024 & weightFillerIP' (xavier 0.02) & biasFillerIP' (constant 0.2)
       fc2 = googleIP 1000 & weightFillerIP' (xavier 0.0009765625) & biasFillerIP' (constant 0)
 
--- What to do at each step in the inner column?
-data ColumnStep = I Inception | Classifier | MaxPool
+-- What to do at each row in the inner column?
+data Row = I Inception | Classifier | MaxPool
 
-googLeNet :: NetBuilder
+insertRow :: Node -> Row -> NetBuilder Node
+insertRow input (I inceptor) = inception input inceptor
+insertRow input Classifier = do
+  intermediateClassifier input
+  return input
+insertRow input MaxPool = do
+  node <- layer' googlePool
+  input >-> node
+  return node
+
+googLeNet :: NetBuilder ()
 googLeNet = do
   (input, initial) <- sequential [conv1, relu, googlePool, googleLRN, conv2, relu, googleLRN, googlePool]
 
-  incepted <- foldM inceptionClassifier initial [
+  top <- foldM insertRow initial [
              I $ Inception 64 96 128 16 32 32,
              I $ Inception 128 128 192 32 96 64,
              MaxPool,
@@ -82,14 +94,10 @@ googLeNet = do
              I $ Inception 256 160 320 32 128 128,
              I $ Inception 384 192 384 48 128 128]
 
-  (_, representation) <- with incepted >- sequential [topPool, dropout 0.4, topFc]
+  (_, representation) <- with top >- sequential [topPool, dropout 0.4, topFc]
 
   forM_ [accuracy 1, accuracy 5, softmax] $ attach (From representation)
   forM_ [googleTrain, googleTest] $ attach (To input)
-    where
-      inceptionClassifier input (I inceptor) = inception input inceptor
-      inceptionClassifier input Classifier = intermediateClassifier input >> return input
-      inceptionClassifier input MaxPool = do {node <- layer' googlePool; input >-> node; return node}
 
 main :: IO ()
 main = cli googLeNet

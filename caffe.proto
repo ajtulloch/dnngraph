@@ -370,6 +370,7 @@ message ContrastiveLossParameter {
 
 // Message that stores parameters used by ConvolutionLayer
 message ConvolutionParameter {
+  optional uint32 num_input = 100; // The number of inputs, used by TORCH
   optional uint32 num_output = 1; // The number of outputs for the layer
   optional bool bias_term = 2 [default = true]; // whether to have bias terms
   // Pad, kernel size, and stride are all given as a single value for equal
@@ -533,6 +534,7 @@ message InfogainLossParameter {
 
 // Message that stores parameters used by InnerProductLayer
 message InnerProductParameter {
+  optional uint32 num_input = 100; // The number of inputs, used by TORCH  
   optional uint32 num_output = 1; // The number of outputs for the layer
   optional bool bias_term = 2 [default = true]; // whether to have bias terms
   optional FillerParameter weight_filler = 3; // The filler for the weight

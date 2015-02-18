@@ -114,5 +114,6 @@ Library
                      , optparse-applicative
                      , text
                      , ihaskell
+                     , containers
                      , ihaskell-magic
   default-language:    Haskell2010

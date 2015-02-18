@@ -16,17 +16,17 @@ import           System.FilePath.Posix
 import           System.Process
 import           Text.ProtocolBuffers  as P
 
-caffePrototxt :: NetBuilder -> FilePath -> FilePath -> IO ()
+caffePrototxt :: NetBuilder a -> FilePath -> String -> IO ()
 caffePrototxt net prototxtPath binaryToText' = do
   parse net & Caffe.middleEnd & Caffe.backend & messagePut & BS.writeFile binaryPath
   rawSystem binaryToText' [binaryPath, prototxtPath] >>= exitWith
     where
       binaryPath = prototxtPath <.> "protobinary"
 
-netPdf :: NetBuilder -> FilePath -> IO ()
+netPdf :: NetBuilder a -> FilePath -> IO ()
 netPdf net path = void $ visualize (parse net) & pdf path
 
-torchCode :: NetBuilder -> FilePath -> IO ()
+torchCode :: NetBuilder a -> FilePath -> IO ()
 torchCode net path = do
   let Just code = parse net & Torch.backend
   writeFile path code
@@ -35,6 +35,7 @@ data Command = Caffe { _fileName, _binaryToText :: String}
              | Torch { _fileName :: String }
              | PDF { _fileName :: String }
 makeLenses ''Command
+makePrisms ''Command
 
 opts :: Parser Command
 opts = subparser (caffe <> torch <> pdf')
@@ -50,10 +51,10 @@ opts = subparser (caffe <> torch <> pdf')
                                    <> metavar "BINARY"
                                    <> value "./binary_to_text.py")
 
-run :: NetBuilder -> Command -> IO ()
+run :: NetBuilder a -> Command -> IO ()
 run net (Caffe prototxtPath binaryToTextPath) = caffePrototxt net prototxtPath binaryToTextPath
 run net (Torch path) = torchCode net path
 run net (PDF path) = netPdf net path
 
-cli :: NetBuilder -> IO ()
+cli :: NetBuilder a -> IO ()
 cli net = execParser (info (helper <*> opts) idm) >>= run net

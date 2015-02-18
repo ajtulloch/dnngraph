@@ -2,6 +2,7 @@
 module NN.Examples.Demo where
 
 import           Control.Lens
+import           Control.Monad
 import           Gen.Caffe.LayerParameter as LP
 import           Gen.Caffe.NetParameter   as NP
 import           GHC.IO.Handle
@@ -16,12 +17,11 @@ import           NN.Backend.Torch.Flat
 import           NN.Backend.Torch.Torch   as Torch
 import           NN.Examples.AlexNet
 import           NN.Examples.GoogLeNet
-import           NN.Graph                 as Graph
 
 caffe :: IO ()
 caffe = do
   let output = parse googLeNet & Caffe.middleEnd & Caffe.backend
-  let names = output ^. NP._layer ^..traverse . LP._name ^..traverse . _Just
+  let names = output ^. NP._layer ^.. traverse . LP._name ^.. traverse . _Just
   print names
 
 torch :: IO ()
@@ -34,16 +34,17 @@ torch = do
 
 torchFancy :: IO ()
 torchFancy = do
-  let gr = do
+  let gr' = do
         x <- layer' relu
-        (_, y) <- with x >- sequential [conv, relu, maxPool, conv, relu, maxPool]
-        (_, z) <- with x >- Graph.layer conv
-        concat'' <- layer' concat'
+        c <- layer' concat'
 
-        y >-> concat''
-        z >-> concat''
-        _ <- with concat'' >- Graph.layer softmax
-        return ()
+        forM_ [1..4] $ \_ -> do
+               (b, t) <- sequential [conv, relu, maxPool, conv, relu]
+               x >-> b
+               t >-> c
+        return (x, c)
+
+  let gr = void $ gr' >- gr' >- sequential [ip 4096, relu, dropout 0.5, ip 1000]
   print $ parse gr & clean & expand'
   print $ parse gr & clean & flattenStructure
   visualize' gr
@@ -51,11 +52,11 @@ torchFancy = do
   putStr str
   return ()
 
-visualize' :: NetBuilder -> IO ()
+visualize' :: NetBuilder () -> IO ()
 visualize' g = do
-  (file, handle) <- openTempFile "/tmp" "graph.pdf"
+  (file, handle) <- openTempFile "/tmp" "graph.png"
   hClose handle
-  f <- parse g & visualize & pdf file
+  f <- parse g & visualize & png file
   _ <- system $ printf "open %s &" f
   return ()
 

@@ -16,21 +16,17 @@ import           NN.Backend.Torch.Lua
 import           NN.Backend.Torch.Torch
 import           Text.Printf
 
-
 data TorchState = TorchState {
       _statements :: [Stat],
       _count      :: Int
     }
 makeLenses ''TorchState
 
+torchEmpty :: TorchState
+torchEmpty = TorchState [] 0
+
 newtype Torch a = Torch { _unTorch :: State TorchState a }
     deriving (Functor, Applicative, Monad, MonadState TorchState)
-
-sequential' :: Exp
-sequential' = torchExp (TorchModule "nn" "Sequential" [])
-
-depthConcat' :: Exp
-depthConcat' = torchExp (TorchModule "nn" "DepthConcat" [])
 
 imports :: Torch ()
 imports = statements <>= [require "nn"]
@@ -48,47 +44,45 @@ finalize id' criteria' = do
                            name' <- fresh "criteria"
                            statements <>= [assign name' exp']
                            return name'
-
   statements' <- use statements
   return $ Block statements' (Just $ return' <$> id':criteriaNames')
 
+
+insertContainer :: Name -> Exp -> [Flat Exp] -> Torch Name
+insertContainer prefix containerModule exps' = do
+  name' <- fresh prefix
+  statements <>= [assign name' containerModule]
+  forM_ exps' $ \exp' ->
+      do
+        innerName' <- insert exp'
+        statements <>= [methCall name' "add" [var' innerName']]
+  return name'
 
 insert :: Flat Exp -> Torch Name
 insert (Single exp') = do
   name' <- fresh "mod"
   statements <>= [assign name' exp']
   return name'
-insert (Seq exps') = do
-  name' <- fresh "seq"
-  statements <>= [assign name' sequential']
-  forM_ exps' $ \exp' ->
-      do
-        innerName' <- insert exp'
-        statements <>= [methCall name' "add" [var' innerName']]
-  return name'
-insert (Par exps') = do
-  name' <- fresh "concat"
-  statements <>= [assign name' depthConcat']
-  forM_ exps' $ \exp' ->
-      do
-        innerName' <- insert exp'
-        statements <>= [methCall name' "add" [var' innerName']]
-  return name'
+insert (Seq exps') = insertContainer "seq" sequential' exps'
+    where
+      sequential' = torchExp (TorchModule "nn" "Sequential" [])
+
+insert (Par exps') = insertContainer "par" depthConcat' exps'
+    where
+      depthConcat' = torchExp (TorchModule "nn" "DepthConcat" [])
+
 runTorch :: Flat LayerParameter -> Torch Block
 runTorch root = do
   imports
-  id' <- insert flatInner
+  id' <- insert innerExps
   finalize id' criteriaExps
       where
-        exped = (((torchExp <$>) <$>) . torchModules) <$> root
-        innerExps = inners <$> exped
-        criteriaExps = F.concatMap id (criteria <$> exped)
-        flatInner = (simplify . nested) innerExps
+        exps = (((torchExp <$>) <$>) . torchModules) <$> root
+        innerExps = (simplify . nested . (inners <$>)) exps
+        criteriaExps = F.concat (criteria <$> exps)
 
 lower :: Flat LayerParameter -> Block
-lower layers = (evalState . _unTorch) (runTorch layers) emptyTorch
-    where
-      emptyTorch = TorchState [] 0
+lower layers = (evalState . _unTorch) (runTorch layers) torchEmpty
 
 codegen :: Block -> String
 codegen block = pprint block & renderPretty 0.4 200 & displayS & \f -> f ""
