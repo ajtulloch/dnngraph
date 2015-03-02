@@ -8,13 +8,16 @@ import           Control.Applicative
 import           Control.Lens               hiding (assign)
 import           Control.Monad.State.Strict
 import qualified Data.Foldable              as F
+import           Data.Monoid
 import           Gen.Caffe.LayerParameter   as LP
 import           Language.Lua.PrettyPrinter
 import           Language.Lua.Syntax
+import           Text.Printf
+
 import           NN.Backend.Torch.Flat
 import           NN.Backend.Torch.Lua
 import           NN.Backend.Torch.Torch
-import           Text.Printf
+
 
 data TorchState = TorchState {
       _statements :: [Stat],
@@ -22,8 +25,10 @@ data TorchState = TorchState {
     }
 makeLenses ''TorchState
 
-torchEmpty :: TorchState
-torchEmpty = TorchState [] 0
+instance Monoid TorchState where
+    mempty = TorchState [] 0
+    (TorchState ls lc) `mappend` (TorchState rs rc) =
+        TorchState (ls <> rs) (max lc rc)
 
 newtype Torch a = Torch { _unTorch :: State TorchState a }
     deriving (Functor, Applicative, Monad, MonadState TorchState)
@@ -39,23 +44,20 @@ fresh prefix = do
 
 finalize :: Name -> [Exp] -> Torch Block
 finalize id' criteria' = do
-  criteriaNames' <- forM criteria' $
-                         \exp' -> do
+  criteriaNames' <- forM criteria' $ \exp' -> do
                            name' <- fresh "criteria"
                            statements <>= [assign name' exp']
                            return name'
   statements' <- use statements
   return $ Block statements' (Just $ return' <$> id':criteriaNames')
 
-
 insertContainer :: Name -> Exp -> [Flat Exp] -> Torch Name
 insertContainer prefix containerModule exps' = do
   name' <- fresh prefix
   statements <>= [assign name' containerModule]
-  forM_ exps' $ \exp' ->
-      do
-        innerName' <- insert exp'
-        statements <>= [methCall name' "add" [var' innerName']]
+  forM_ exps' $ \exp' -> do
+    innerName' <- insert exp'
+    statements <>= [methCall name' "add" [var' innerName']]
   return name'
 
 insert :: Flat Exp -> Torch Name
@@ -66,7 +68,6 @@ insert (Single exp') = do
 insert (Seq exps') = insertContainer "seq" sequential' exps'
     where
       sequential' = torchExp (TorchModule "nn" "Sequential" [])
-
 insert (Par exps') = insertContainer "par" depthConcat' exps'
     where
       depthConcat' = torchExp (TorchModule "nn" "DepthConcat" [])
@@ -82,7 +83,7 @@ runTorch root = do
         criteriaExps = F.concat (criteria <$> exps)
 
 lower :: Flat LayerParameter -> Block
-lower layers = (evalState . _unTorch) (runTorch layers) torchEmpty
+lower layers = (evalState . _unTorch) (runTorch layers) mempty
 
 codegen :: Block -> String
 codegen block = pprint block & renderPretty 0.4 200 & displayS & \f -> f ""
