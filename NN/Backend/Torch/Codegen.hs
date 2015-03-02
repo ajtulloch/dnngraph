@@ -33,8 +33,11 @@ instance Monoid TorchState where
 newtype Torch a = Torch { _unTorch :: State TorchState a }
     deriving (Functor, Applicative, Monad, MonadState TorchState)
 
+(<>+) :: MonadState s m => ASetter' s [t] -> t -> m ()
+xs <>+ x = xs <>= [x]
+
 imports :: Torch ()
-imports = statements <>= [require "nn"]
+imports = statements <>+ require "nn"
 
 fresh :: String -> Torch String
 fresh prefix = do
@@ -46,7 +49,7 @@ finalize :: Name -> [Exp] -> Torch Block
 finalize id' criteria' = do
   criteriaNames' <- forM criteria' $ \exp' -> do
                            name' <- fresh "criteria"
-                           statements <>= [assign name' exp']
+                           statements <>+ assign name' exp'
                            return name'
   statements' <- use statements
   return $ Block statements' (Just $ return' <$> id':criteriaNames')
@@ -54,16 +57,17 @@ finalize id' criteria' = do
 insertContainer :: Name -> Exp -> [Flat Exp] -> Torch Name
 insertContainer prefix containerModule exps' = do
   name' <- fresh prefix
-  statements <>= [assign name' containerModule]
+  statements <>+ assign name' containerModule
   forM_ exps' $ \exp' -> do
     innerName' <- insert exp'
-    statements <>= [methCall name' "add" [var' innerName']]
+    statements <>+ methCall name' "add" [var' innerName']
   return name'
+
 
 insert :: Flat Exp -> Torch Name
 insert (Single exp') = do
   name' <- fresh "mod"
-  statements <>= [assign name' exp']
+  statements <>+ assign name' exp'
   return name'
 insert (Seq exps') = insertContainer "seq" sequential' exps'
     where

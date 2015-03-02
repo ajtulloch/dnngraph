@@ -25,8 +25,8 @@ layer' l = do
   put (gid + 1, insNode (gid, l) s)
   return gid
 
-data Attach = From Node | To Node
-attach :: Attach -> a -> G a ()
+data Attach a = From a | To a
+attach :: Attach Node -> a -> G a ()
 attach (From n) l = do {l' <- layer' l; n >-> l'}
 attach (To n) l = do {l' <- layer' l; l' >-> n}
 
