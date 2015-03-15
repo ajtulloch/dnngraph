@@ -100,20 +100,21 @@ Library
   build-depends:       base >=4.7 && <4.8
                      , bytestring
                      , containers
+                     , containers
                      , fgl
                      , filepath
+                     , formatting
                      , graphviz
+                     , ihaskell
+                     , ihaskell-magic
                      , language-lua
                      , lens
                      , mtl
+                     , optparse-applicative
                      , process
                      , protocol-buffers
                      , protocol-buffers-descriptor
                      , template-haskell
                      , temporary
-                     , optparse-applicative
                      , text
-                     , ihaskell
-                     , containers
-                     , ihaskell-magic
   default-language:    Haskell2010

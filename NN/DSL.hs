@@ -20,9 +20,8 @@ import           Gen.Caffe.TransformationParameter     as TP
 import           Control.Lens
 import           Data.Maybe
 import           Data.Sequence
-import           Text.ProtocolBuffers                  as P
-
 import           NN.Graph
+import           Text.ProtocolBuffers                  as P
 
 type Net = Gr LayerParameter ()
 type AnnotatedNet a = Gr (LayerParameter, a) ()

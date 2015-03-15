@@ -57,7 +57,7 @@ torchModules lp = go (layerTy lp)
                    Just MAX -> "SpatialMaxPooling"
                    Just AVE -> "SpatialAveragePooling"
                    _ -> error "Unsupported Pooling Type"
-            poolP f = lp ^. LP._pooling_param ^? _Just . f . _Just
+            poolP f = lp ^?! LP._pooling_param._Just ^?! f
       go Conv = [nn (convolutionImpl kW) [nInputPlane, nOutputPlane, kW, kH, dW, dH, padding]]
           where
             kW = convP CP._kernel_size
@@ -68,14 +68,15 @@ torchModules lp = go (layerTy lp)
             -- TODO - propagation pass to size the layers
             nInputPlane = Nothing
             nOutputPlane = convP CP._num_output
-            convP f = lp ^. LP._convolution_param ^? _Just . f . _Just
+            convP f = lp ^?! LP._convolution_param._Just ^?! f
       go ReLU = [nn' "Threshold"]
       go IP = [nn "Linear" [nInput, nOutput]]
           where
             -- TODO - propagation pass to size the layers
             nInput = Nothing
-            nOutput = lp ^. LP._inner_product_param ^? _Just  . IP._num_output . _Just
-      go Dropout = [nn "Dropout" [ratio]] where Just ratio = lp ^. LP._dropout_param ^? _Just . DP._dropout_ratio . _Just
+            nOutput = lp ^?! LP._inner_product_param._Just ^?! IP._num_output
+      go Dropout = [nn "Dropout" [ratio]] where
+          Just ratio = lp ^?! LP._dropout_param._Just ^?! DP._dropout_ratio
       go SoftmaxWithLoss = [nn' "LogSoftMax", criterion "ClassNLLCriterion"]
       go Concat = [] -- Handled by flattening implementation
       go ty' = error  $ "Unhandled layer type: " ++ show ty'
