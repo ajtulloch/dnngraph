@@ -67,6 +67,11 @@ https://github.com/BVLC/caffe/blob/master/models/bvlc_alexnet/train_val.prototxt
     forM_ [accuracy 1, accuracy 5, softmax] $ attach (From representation)
 #+end_src
 
+or visually, using =NN.Visualize=,
+
+#+ATTR_HTML: :height 600px
+[[http://i.imgur.com/1hKlPdA.png]]
+
 *** GoogLeNet
 The following script generates a replica of
 https://github.com/BVLC/caffe/blob/master/models/bvlc_googlenet/train_val.prototxt
@@ -329,7 +334,7 @@ The =NN.Visualize= module provides some plotting tools. To use these,
 
 An example output is (click for higher resolution):
 #+ATTR_HTML: :height 600px
-[[http://i.imgur.com/7n7kf9w.png][http://i.imgur.com/7n7kf9w.png]]
+[[http://i.imgur.com/ScvjNmT.jpg]]
 ** Parameter Sweeps
 To use this, write your model generation script as a Haskell file, and
 then (for example)

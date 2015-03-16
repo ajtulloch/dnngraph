@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module NN.Visualize(visualize, visualizeWith, png, pdf, scaled, defaultNNParams) where
+module NN.Visualize(visualize, visualizeWith, render, png, pdf, scaled, defaultNNParams) where
 
 import           Gen.Caffe.AccuracyParameter            as AP
 import           Gen.Caffe.ConvolutionParameter         as CP
@@ -45,11 +45,12 @@ visualizeWith = graphToDot
 visualize :: Net -> DotGraph Node
 visualize = visualizeWith defaultNNParams
 
-png :: FilePath -> DotGraph Node -> IO FilePath
-png path g = runGraphviz g Png path
+render :: GraphvizOutput -> FilePath -> DotGraph Node -> IO FilePath
+render fmt path g = runGraphviz g fmt path
 
-pdf :: FilePath -> DotGraph Node -> IO FilePath
-pdf path g = runGraphviz g Pdf path
+pdf, png :: FilePath -> DotGraph Node -> IO FilePath
+png = render Png
+pdf = render Pdf
 
 fmtLabelParameter :: LayerDetail -> (Node, LayerParameter) -> [Attribute]
 fmtLabelParameter level (_, lp) =

@@ -12,7 +12,6 @@ import qualified Data.Graph.Inductive.Graph as G
 import           Data.Graph.Inductive.Query
 import           Data.Maybe
 import qualified Data.Sequence              as S
-import           Data.Traversable           as T
 
 import           Text.Printf
 import           Text.ProtocolBuffers       as P
