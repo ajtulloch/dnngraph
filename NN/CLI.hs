@@ -24,8 +24,8 @@ caffePrototxt net prototxtPath binaryToText' = do
     where
       binaryPath = prototxtPath <.> "protobinary"
 
-visualize' :: NetBuilder a -> GraphvizOutput -> FilePath -> IO ()
-visualize' net format path = void $ visualize (parse net) & render format path
+graph :: NetBuilder a -> GraphvizOutput -> FilePath -> IO ()
+graph net format path = void $ visualize (parse net) & render format path
 
 torchCode :: NetBuilder a -> FilePath -> IO ()
 torchCode net path = do
@@ -39,12 +39,12 @@ makeLenses ''Command
 makePrisms ''Command
 
 opts :: Parser Command
-opts = subparser (caffe <> torch <> visualize'')
+opts = subparser (caffe <> torch <> graph')
        where
          nc name parser desc = command name (info (helper <*> parser) (progDesc desc))
          caffe = nc "caffe" (Caffe <$> fileName' <*> binaryToText') "Generate a Caffe .prototxt to run with `caffe train --model=<>"
          torch = nc "torch" (Torch <$> fileName') "Generate Lua code to be `require`'d into an existing Torch script"
-         visualize'' = nc "visualize" (Visualize <$> fileName' <*> vf) "Generate a Visualize visualizing the model's connectivity"
+         graph' = nc "visualize" (Visualize <$> fileName' <*> vf) "Generate a Visualize visualizing the model's connectivity"
          fileName' = strOption (long "output" <> help "Write output to FILE" <> metavar "FILE")
          binaryToText' = strOption (long "binary_to_text"
                                    <> help "Path to binary_to_text.py BINARY"
@@ -57,7 +57,7 @@ opts = subparser (caffe <> torch <> visualize'')
 run :: NetBuilder a -> Command -> IO ()
 run net (Caffe prototxtPath binaryToTextPath) = caffePrototxt net prototxtPath binaryToTextPath
 run net (Torch path) = torchCode net path
-run net (Visualize path format) = visualize' net (fmtTy format) path
+run net (Visualize path format) = graph net (fmtTy format) path
     where
       fmtTy "png" = Png
       fmtTy "pdf" = Pdf
