@@ -1,4 +1,4 @@
-* CaffeGraph - A deep neural network model generation DSL in Haskell
+* DNNGraph - A deep neural network model generation DSL in Haskell
 It consists of several parts:
 
 - A DSL for specifying the model. This uses the [[http://lens.github.io/][lens]] library for
