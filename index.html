@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="UTF-8">
+    <title>dnngraph by ajtulloch</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
+    <link href='http://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+  </head>
+  <body>
+    <section class="page-header">
+      <h1 class="project-name">dnngraph</h1>
+      <h2 class="project-tagline">A DSL for deep neural networks, supporting Caffe and Torch</h2>
+      <a href="https://github.com/ajtulloch/dnngraph" class="btn">View on GitHub</a>
+      <a href="https://github.com/ajtulloch/dnngraph/zipball/master" class="btn">Download .zip</a>
+      <a href="https://github.com/ajtulloch/dnngraph/tarball/master" class="btn">Download .tar.gz</a>
+    </section>
+
+    <section class="main-content">
+      <h1>
+<a id="dnngraph---a-deep-neural-network-model-generation-dsl-in-haskell" class="anchor" href="#dnngraph---a-deep-neural-network-model-generation-dsl-in-haskell" aria-hidden="true"><span class="octicon octicon-link"></span></a>DNNGraph - A deep neural network model generation DSL in Haskell</h1>
+
+<p>It consists of several parts:</p>
+
+<ul>
+<li>  A DSL for specifying the model. This uses the <a href="http://lens.github.io/">lens</a> library for elegant, composable constructions, and the <em>fgl</em> graph library for specifying the network layout.</li>
+<li>  A set of optimization passes that run over the graph representation to improve the performance of the model. For example, we can take advantage of the fact that several layers types (<code>ReLU</code>, <code>Dropout</code>) can operate in-place.</li>
+<li>  A set of backends to generate code for the platform. Currently, we generate
+
+<ul>
+<li>  Caffe (by generating model <code>prototxt</code> files)</li>
+<li>  Torch (by generating Lua scripts)</li>
+</ul>
+</li>
+<li>  A set of useful CLI tools for exporting, visualizing and understanding a model (visualization of network structure, parameter density)</li>
+</ul>
+
+<p>For a guided example, see a <a href="http://bit.ly/17kDYze">demonstration IHaskell Notebook</a>.</p>
+
+<h2>
+<a id="dsl-examples" class="anchor" href="#dsl-examples" aria-hidden="true"><span class="octicon octicon-link"></span></a>DSL Examples</h2>
+
+<p>The following script generates a replica of <a href="https://github.com/BVLC/caffe/blob/master/models/bvlc_alexnet/train_val.prototxt">https://github.com/BVLC/caffe/blob/master/models/bvlc_alexnet/train_val.prototxt</a>.</p>
+
+<h3>
+<a id="alexnet" class="anchor" href="#alexnet" aria-hidden="true"><span class="octicon octicon-link"></span></a>AlexNet</h3>
+
+<div class="highlight highlight-haskell"><pre>  <span class="pl-k">import</span>           <span class="pl-c1">Control.Lens</span>
+  <span class="pl-k">import</span>           <span class="pl-c1">Control.Monad</span>
+
+  <span class="pl-k">import</span>           <span class="pl-c1">NN.DSL</span>
+  <span class="pl-k">import</span>           <span class="pl-c1">NN.Examples.ImageNet</span>
+  <span class="pl-k">import</span>           <span class="pl-c1">NN.Graph</span>
+
+  alexTrain = train &amp; cropSize' <span class="pl-c1">227</span> &amp; batchSize' <span class="pl-c1">256</span> &amp; mirror' <span class="pl-c1">True</span>
+  alexTest = test &amp; cropSize' <span class="pl-c1">227</span> &amp; batchSize' <span class="pl-c1">50</span> &amp; mirror' <span class="pl-c1">False</span>
+
+  alexLrn = lrn &amp; localSize' <span class="pl-c1">5</span> &amp; alphaLRN' <span class="pl-c1">0.0001</span> &amp; betaLRN' <span class="pl-c1">0.75</span>
+  alexConv = conv &amp; param' alexMult &amp; weightFillerC' (gaussian <span class="pl-c1">0.01</span>) &amp; biasFillerC' zero
+  alexIP n = ip n &amp; param' alexMult &amp; weightFillerIP' (gaussian <span class="pl-c1">0.005</span>) &amp; biasFillerIP' (constant <span class="pl-c1">0.1</span>)
+  alexPool = maxPool &amp; sizeP' <span class="pl-c1">3</span>
+
+  alexMult = [def &amp; lrMult' <span class="pl-c1">1</span> &amp; decayMult' <span class="pl-c1">1</span>, <span class="pl-c">-- weights</span>
+              def &amp; lrMult' <span class="pl-c1">2</span> &amp; decayMult' <span class="pl-c1">0</span>] <span class="pl-c">-- biases</span>
+
+  <span class="pl-c">-- |Model</span>
+  conv1 = alexConv &amp; numOutputC' <span class="pl-c1">96</span> &amp; kernelSizeC' <span class="pl-c1">11</span> &amp; strideC' <span class="pl-c1">4</span>
+  conv2 = alexConv &amp; numOutputC' <span class="pl-c1">256</span> &amp; padC' <span class="pl-c1">2</span> &amp; kernelSizeC' <span class="pl-c1">5</span> &amp; groupC' <span class="pl-c1">2</span>
+  conv3 = alexConv &amp; numOutputC' <span class="pl-c1">384</span> &amp; padC' <span class="pl-c1">1</span> &amp; kernelSizeC' <span class="pl-c1">3</span>
+  conv4 = alexConv &amp; numOutputC' <span class="pl-c1">384</span> &amp; padC' <span class="pl-c1">1</span> &amp; kernelSizeC' <span class="pl-c1">3</span> &amp; groupC' <span class="pl-c1">2</span> &amp; biasFillerC' (constant <span class="pl-c1">0.1</span>)
+  conv5 = alexConv &amp; numOutputC' <span class="pl-c1">256</span> &amp; padC' <span class="pl-c1">1</span> &amp; kernelSizeC' <span class="pl-c1">3</span> &amp; groupC' <span class="pl-c1">2</span> &amp; biasFillerC' (constant <span class="pl-c1">0.1</span>)
+
+  alexNet = <span class="pl-k">do</span>
+    <span class="pl-c">-- Set up the model</span>
+    (input', representation) &lt;-
+        sequential [
+             <span class="pl-c">-- Convolutional Layers</span>
+             conv1, relu, alexLrn, alexPool &amp; strideP' <span class="pl-c1">3</span>,
+             conv2, relu, alexLrn, alexPool &amp; strideP' <span class="pl-c1">2</span>,
+             conv3, relu,
+             conv4, relu,
+             conv5, relu, alexPool &amp; strideP' <span class="pl-c1">2</span>,
+             <span class="pl-c">-- FC Layers</span>
+             alexIP <span class="pl-c1">4096</span>, relu, dropout <span class="pl-c1">0.5</span>,
+             alexIP <span class="pl-c1">4096</span>, relu, dropout <span class="pl-c1">0.5</span>,
+             alexIP <span class="pl-c1">1000</span> &amp; weightFillerIP' (gaussian <span class="pl-c1">0.01</span>) &amp; biasFillerIP' zero]
+
+    forM_ [alexTrain, alexTest] $ attach (<span class="pl-c1">To</span> input')
+    forM_ [accuracy <span class="pl-c1">1</span>, accuracy <span class="pl-c1">5</span>, softmax] $ attach (<span class="pl-c1">From</span> representation)</pre></div>
+
+<p>or visually, using <code>NN.Visualize</code>,</p>
+
+<p><img src="http://i.imgur.com/1hKlPdA.png" alt=""></p>
+
+<h3>
+<a id="googlenet" class="anchor" href="#googlenet" aria-hidden="true"><span class="octicon octicon-link"></span></a>GoogLeNet</h3>
+
+<p>The following script generates a replica of <a href="https://github.com/BVLC/caffe/blob/master/models/bvlc_googlenet/train_val.prototxt">https://github.com/BVLC/caffe/blob/master/models/bvlc_googlenet/train_val.prototxt</a></p>
+
+<div class="highlight highlight-haskell"><pre>  <span class="pl-k">module</span> <span class="pl-c1">NN.Examples.GoogLeNet</span> <span class="pl-k">where</span>
+
+  <span class="pl-k">import</span>           <span class="pl-c1">Gen.Caffe.FillerParameter</span>       <span class="pl-k">as</span> <span class="pl-c1">FP</span>
+  <span class="pl-k">import</span>           <span class="pl-c1">Gen.Caffe.InnerProductParameter</span> <span class="pl-k">as</span> <span class="pl-c1">IP</span>
+  <span class="pl-k">import</span>           <span class="pl-c1">Gen.Caffe.LayerParameter</span>        <span class="pl-k">as</span> <span class="pl-c1">LP</span>
+
+  <span class="pl-k">import</span>           <span class="pl-c1">Control.Lens</span>
+  <span class="pl-k">import</span>           <span class="pl-c1">Control.Monad</span>
+  <span class="pl-k">import</span>           <span class="pl-c1">Data.Sequence</span>                   (<span class="pl-en">singleton</span>)
+  <span class="pl-k">import</span>           <span class="pl-c1">Data.Word</span>
+
+  <span class="pl-k">import</span>           <span class="pl-c1">NN</span>
+  <span class="pl-k">import</span>           <span class="pl-c1">NN.Examples.ImageNet</span>
+
+
+  googleTrain = train &amp; mirror' <span class="pl-c1">True</span> &amp; batchSize' <span class="pl-c1">32</span> &amp; cropSize' <span class="pl-c1">224</span>
+  googleTest = test &amp; mirror' <span class="pl-c1">False</span> &amp; batchSize' <span class="pl-c1">50</span> &amp; cropSize' <span class="pl-c1">224</span>
+
+  googleMult = [def &amp; lrMult' <span class="pl-c1">1</span> &amp; decayMult' <span class="pl-c1">1</span>, <span class="pl-c">-- weights</span>
+                def &amp; lrMult' <span class="pl-c1">2</span> &amp; decayMult' <span class="pl-c1">0</span>] <span class="pl-c">-- biases</span>
+  googleConv = conv &amp; param' googleMult &amp; biasFillerC' (constant <span class="pl-c1">0.2</span>)
+  googleLRN = lrn &amp; localSize' <span class="pl-c1">5</span> &amp; alphaLRN' <span class="pl-c1">0.0001</span> &amp; betaLRN' <span class="pl-c1">0.75</span>
+  googlePool = maxPool &amp; sizeP' <span class="pl-c1">3</span> &amp; strideP' <span class="pl-c1">2</span>
+  googleIP n = ip n &amp; param' googleMult
+
+  conv1 = googleConv &amp; numOutputC' <span class="pl-c1">64</span> &amp; padC' <span class="pl-c1">3</span> &amp; kernelSizeC' <span class="pl-c1">7</span> &amp; strideC' <span class="pl-c1">2</span> &amp; weightFillerC' (xavier <span class="pl-c1">0.1</span>)
+  conv2 = googleConv &amp; numOutputC' <span class="pl-c1">192</span> &amp; padC' <span class="pl-c1">1</span> &amp; kernelSizeC' <span class="pl-c1">3</span> &amp; weightFillerC' (xavier <span class="pl-c1">0.03</span>)
+
+  topPool = avgPool &amp; sizeP' <span class="pl-c1">7</span> &amp; strideP' <span class="pl-c1">1</span>
+  topFc = googleIP <span class="pl-c1">1000</span> &amp; biasFillerIP' (constant <span class="pl-c1">0</span>) &amp; weightFillerIP' (xavier <span class="pl-c1">0.0</span>)
+          <span class="pl-c">-- Weird, but in Caffe replication</span>
+          &amp; _inner_product_param._Just.<span class="pl-c1">IP</span>._weight_filler._Just._std .~ <span class="pl-c1">Nothing</span>
+
+  <span class="pl-k">data</span> <span class="pl-c1">Inception</span> = <span class="pl-c1">Inception</span> {_1x1, _3x3reduce, _3x3, _5x5reduce, _5x5, _poolProj :: <span class="pl-c1">Word32</span>}
+
+  <span class="pl-en">inception</span> <span class="pl-k">::</span> <span class="pl-k">Node</span> <span class="pl-k">-&gt;</span> <span class="pl-k">Inception</span> <span class="pl-k">-&gt;</span> <span class="pl-k">NetBuilder</span> <span class="pl-k">Node</span>
+  inception input <span class="pl-c1">Inception</span>{..} = <span class="pl-k">do</span>
+    columns' &lt;- <span class="pl-c1">mapM</span> sequential columns
+    concat'' &lt;- layer' concat'
+    forM_ columns' $ \(bottom, top) -&gt; <span class="pl-k">do</span>
+                                    input &gt;-&gt; bottom
+                                    top &gt;-&gt; concat''
+    <span class="pl-c1">return</span> concat''
+      <span class="pl-k">where</span>
+        columns = [
+         [googleConv &amp; numOutputC' _1x1  &amp; kernelSizeC' <span class="pl-c1">1</span> &amp; weightFillerC' (xavier <span class="pl-c1">0.03</span>), relu],
+         [googleConv &amp; numOutputC' _3x3reduce &amp; kernelSizeC' <span class="pl-c1">1</span> &amp; weightFillerC' (xavier <span class="pl-c1">0.09</span>), relu, googleConv &amp; numOutputC' _3x3 &amp; kernelSizeC' <span class="pl-c1">3</span> &amp; weightFillerC' (xavier <span class="pl-c1">0.03</span>) &amp; padC' <span class="pl-c1">1</span>, relu],
+         [googleConv &amp; numOutputC' _5x5reduce &amp; kernelSizeC' <span class="pl-c1">1</span> &amp; weightFillerC' (xavier <span class="pl-c1">0.2</span>), relu, googleConv &amp; numOutputC' _5x5 &amp; kernelSizeC' <span class="pl-c1">5</span> &amp; weightFillerC' (xavier <span class="pl-c1">0.03</span>) &amp; padC' <span class="pl-c1">2</span>, relu],
+         [maxPool&amp; sizeP' <span class="pl-c1">3</span> &amp; strideP' <span class="pl-c1">3</span> &amp; padP' <span class="pl-c1">1</span>, googleConv &amp; numOutputC' _poolProj &amp; kernelSizeC' <span class="pl-c1">1</span> &amp; weightFillerC' (xavier <span class="pl-c1">0.1</span>), relu<span class="pl-k">]]</span>
+
+  <span class="pl-en">intermediateClassifier</span> <span class="pl-k">::</span> <span class="pl-k">Node</span> <span class="pl-k">-&gt;</span> <span class="pl-k">NetBuilder</span> <span class="pl-c1">()</span>
+  intermediateClassifier source = <span class="pl-k">do</span>
+    (input, representation) &lt;- sequential [pool1, conv1', relu, fc1, relu, dropout <span class="pl-c1">0.7</span>, fc2]
+    source &gt;-&gt; input
+
+    forM_ [accuracy <span class="pl-c1">1</span>, accuracy <span class="pl-c1">5</span>, softmax &amp; _loss_weight &lt;&gt;~ singleton <span class="pl-c1">0.3</span>] $ attach (<span class="pl-c1">From</span> representation)
+      <span class="pl-k">where</span>
+        pool1 = avgPool &amp; sizeP' <span class="pl-c1">5</span> &amp; strideP' <span class="pl-c1">3</span>
+        conv1' = googleConv &amp; numOutputC' <span class="pl-c1">128</span> &amp; kernelSizeC' <span class="pl-c1">1</span> &amp; weightFillerC' (xavier <span class="pl-c1">0.08</span>)
+        fc1 = googleIP <span class="pl-c1">1024</span> &amp; weightFillerIP' (xavier <span class="pl-c1">0.02</span>) &amp; biasFillerIP' (constant <span class="pl-c1">0.2</span>)
+        fc2 = googleIP <span class="pl-c1">1000</span> &amp; weightFillerIP' (xavier <span class="pl-c1">0.0009765625</span>) &amp; biasFillerIP' (constant <span class="pl-c1">0</span>)
+
+  <span class="pl-c">-- What to do at each row in the inner column?</span>
+  <span class="pl-k">data</span> <span class="pl-c1">Row</span> = <span class="pl-c1">I</span> <span class="pl-c1">Inception</span> | <span class="pl-c1">Classifier</span> | <span class="pl-c1">MaxPool</span>
+
+  <span class="pl-en">insertRow</span> <span class="pl-k">::</span> <span class="pl-k">Node</span> <span class="pl-k">-&gt;</span> <span class="pl-k">Row</span> <span class="pl-k">-&gt;</span> <span class="pl-k">NetBuilder</span> <span class="pl-k">Node</span>
+  insertRow input (<span class="pl-c1">I</span> inceptor) = inception input inceptor
+  insertRow input <span class="pl-c1">Classifier</span> = <span class="pl-k">do</span>
+    intermediateClassifier input
+    <span class="pl-c1">return</span> input
+  insertRow input <span class="pl-c1">MaxPool</span> = <span class="pl-k">do</span>
+    node &lt;- layer' googlePool
+    input &gt;-&gt; node
+    <span class="pl-c1">return</span> node
+
+  <span class="pl-en">googLeNet</span> <span class="pl-k">::</span> <span class="pl-k">NetBuilder</span> <span class="pl-c1">()</span>
+  googLeNet = <span class="pl-k">do</span>
+    (input, initial) &lt;- sequential [conv1, relu, googlePool, googleLRN, conv2, relu, googleLRN, googlePool]
+
+    top &lt;- foldM insertRow initial [
+               <span class="pl-c1">I</span> $ <span class="pl-c1">Inception</span> <span class="pl-c1">64</span> <span class="pl-c1">96</span> <span class="pl-c1">128</span> <span class="pl-c1">16</span> <span class="pl-c1">32</span> <span class="pl-c1">32</span>,
+               <span class="pl-c1">I</span> $ <span class="pl-c1">Inception</span> <span class="pl-c1">128</span> <span class="pl-c1">128</span> <span class="pl-c1">192</span> <span class="pl-c1">32</span> <span class="pl-c1">96</span> <span class="pl-c1">64</span>,
+               <span class="pl-c1">MaxPool</span>,
+               <span class="pl-c1">I</span> $ <span class="pl-c1">Inception</span> <span class="pl-c1">192</span> <span class="pl-c1">96</span> <span class="pl-c1">208</span> <span class="pl-c1">16</span> <span class="pl-c1">48</span> <span class="pl-c1">64</span>,
+               <span class="pl-c1">Classifier</span>,
+               <span class="pl-c1">I</span> $ <span class="pl-c1">Inception</span> <span class="pl-c1">150</span> <span class="pl-c1">112</span> <span class="pl-c1">224</span> <span class="pl-c1">24</span> <span class="pl-c1">64</span> <span class="pl-c1">64</span>,
+               <span class="pl-c1">I</span> $ <span class="pl-c1">Inception</span> <span class="pl-c1">128</span> <span class="pl-c1">128</span> <span class="pl-c1">256</span> <span class="pl-c1">24</span> <span class="pl-c1">64</span> <span class="pl-c1">64</span>,
+               <span class="pl-c1">I</span> $ <span class="pl-c1">Inception</span> <span class="pl-c1">112</span> <span class="pl-c1">144</span> <span class="pl-c1">288</span> <span class="pl-c1">32</span> <span class="pl-c1">64</span> <span class="pl-c1">64</span>,
+               <span class="pl-c1">Classifier</span>,
+               <span class="pl-c1">I</span> $ <span class="pl-c1">Inception</span> <span class="pl-c1">256</span> <span class="pl-c1">160</span> <span class="pl-c1">320</span> <span class="pl-c1">32</span> <span class="pl-c1">128</span> <span class="pl-c1">128</span>,
+               <span class="pl-c1">MaxPool</span>,
+               <span class="pl-c1">I</span> $ <span class="pl-c1">Inception</span> <span class="pl-c1">256</span> <span class="pl-c1">160</span> <span class="pl-c1">320</span> <span class="pl-c1">32</span> <span class="pl-c1">128</span> <span class="pl-c1">128</span>,
+               <span class="pl-c1">I</span> $ <span class="pl-c1">Inception</span> <span class="pl-c1">384</span> <span class="pl-c1">192</span> <span class="pl-c1">384</span> <span class="pl-c1">48</span> <span class="pl-c1">128</span> <span class="pl-c1">128</span>]
+
+    (_, representation) &lt;- with top &gt;- sequential [topPool, dropout <span class="pl-c1">0.4</span>, topFc]
+
+    forM_ [accuracy <span class="pl-c1">1</span>, accuracy <span class="pl-c1">5</span>, softmax] $ attach (<span class="pl-c1">From</span> representation)
+    forM_ [googleTrain, googleTest] $ attach (<span class="pl-c1">To</span> input)
+
+  <span class="pl-en">main</span> <span class="pl-k">::</span> <span class="pl-c1">IO</span> <span class="pl-c1">()</span>
+  main = cli googLeNet</pre></div>
+
+<h2>
+<a id="cli-usage" class="anchor" href="#cli-usage" aria-hidden="true"><span class="octicon octicon-link"></span></a>CLI Usage</h2>
+
+<p>In the GoogLeNet example, above, we included the line <code>main</code> cli googLeNet=. This generates a CLI for our model that can be accessed with <code>runhaskell /path/to/our/model.hs</code>. Currently, we can</p>
+
+<ul>
+<li>  export to Caffe</li>
+<li>  export to Torch</li>
+<li>  visualize the network structure.</li>
+</ul>
+
+<p>For example:</p>
+
+<pre><code>$ runhaskell NN/Examples/GoogLeNet.hs --help
+Usage: GoogLeNet.hs COMMAND
+
+Available options:
+  -h,--help                Show this help text
+
+Available commands:
+  caffe                    Generate a Caffe .prototxt to run with `caffe train
+                           --model=&lt;&gt;
+  torch                    Generate Lua code to be `require`'d into an existing
+                           Torch script
+  pdf                      Generate a PDF visualizing the model's connectivity
+
+$ runhaskell NN/Examples/GoogLeNet.hs caffe --output /tmp/x.prototxt
+$ runhaskell NN/Examples/GoogLeNet.hs pdf --output /tmp/x.pdf
+</code></pre>
+
+<h2>
+<a id="caffe-backend" class="anchor" href="#caffe-backend" aria-hidden="true"><span class="octicon octicon-link"></span></a>Caffe Backend</h2>
+
+<p>The Caffe backend generates a Caffe <code>.prototxt</code> that can be run with <code>caffe train --model=&lt;&gt;</code>, without any modification necessary.</p>
+
+<h2>
+<a id="torch-backend" class="anchor" href="#torch-backend" aria-hidden="true"><span class="octicon octicon-link"></span></a>Torch Backend</h2>
+
+<p>The Torch backend generates Lua code that can be imported directly into an existing Torch script.</p>
+
+<p>Anything network that can be expressed as a nested combination of computational layers, combined with <code>nn.Sequential</code>, <code>nn.Concat</code>, <code>nn.ModelParallel</code>, <code>nn.DataParallel</code> etc can be generated under this framework.</p>
+
+<p>For an example output, the model specified as</p>
+
+<div class="highlight highlight-haskell"><pre>  alexTrain = train &amp; cropSize' <span class="pl-c1">227</span> &amp; batchSize' <span class="pl-c1">256</span> &amp; mirror' <span class="pl-c1">True</span>
+  alexTest = test &amp; cropSize' <span class="pl-c1">227</span> &amp; batchSize' <span class="pl-c1">50</span> &amp; mirror' <span class="pl-c1">False</span>
+
+  alexConv = conv &amp; param' alexMult &amp; weightFillerC' (gaussian <span class="pl-c1">0.01</span>) &amp; biasFillerC' zero
+  alexPool = maxPool &amp; sizeP' <span class="pl-c1">3</span>
+
+  conv1 = alexConv &amp; numOutputC' <span class="pl-c1">96</span> &amp; kernelSizeC' <span class="pl-c1">11</span> &amp; strideC' <span class="pl-c1">4</span>
+  pool1 = alexPool &amp; strideP' <span class="pl-c1">3</span>
+
+  model = <span class="pl-k">do</span>
+    (input', representation) &lt;- sequential [conv1, relu, pool1]
+    forM_ [alexTrain, alexTest] $ attach (<span class="pl-c1">To</span> input')
+    forM_ [accuracy <span class="pl-c1">1</span>, accuracy <span class="pl-c1">5</span>, softmax] $ attach (<span class="pl-c1">From</span> representation)</pre></div>
+
+<p>generates the following code:</p>
+
+<div class="highlight highlight-lua"><pre>  <span class="pl-c1">require</span>(<span class="pl-s"><span class="pl-pds">"</span>nn<span class="pl-pds">"</span></span>)
+  <span class="pl-c1">require</span>(<span class="pl-s"><span class="pl-pds">"</span>cunn<span class="pl-pds">"</span></span>)
+  <span class="pl-k">local</span> seq0 <span class="pl-k">=</span> nn.<span class="pl-c1">Sequential</span>()
+  seq0:<span class="pl-c1">add</span>(nn.<span class="pl-c1">SpatialConvolutionMM</span>(<span class="pl-c1">nil</span>, <span class="pl-c1">96</span>, <span class="pl-c1">11</span>, <span class="pl-c1">11</span>, <span class="pl-c1">4</span>, <span class="pl-c1">4</span>, <span class="pl-c1">0</span>))
+  seq0:<span class="pl-c1">add</span>(nn.<span class="pl-c1">Threshold</span>())
+  seq0:<span class="pl-c1">add</span>(nn.<span class="pl-c1">SpatialMaxPooling</span>(<span class="pl-c1">3</span>, <span class="pl-c1">3</span>, <span class="pl-c1">3</span>, <span class="pl-c1">3</span>))
+  seq0:<span class="pl-c1">add</span>(nn.<span class="pl-c1">LogSoftMax</span>())
+  <span class="pl-k">local</span> criterion1 <span class="pl-k">=</span> nn.<span class="pl-c1">ClassNLLCriterion</span>()
+  <span class="pl-k">return</span> seq0, criterion1</pre></div>
+
+<p>For a more complicated example, the network specified as</p>
+
+<div class="highlight highlight-haskell"><pre>  <span class="pl-k">do</span>
+    x &lt;- layer' relu
+    (_, y) &lt;- with x &gt;- sequential [conv, relu, maxPool, conv, relu]
+    (_, z) &lt;- with x &gt;- sequential [conv, relu, maxPool, conv, relu]
+    concat'' &lt;- layer' concat'
+
+    y &gt;-&gt; concat''
+    z &gt;-&gt; concat''
+    _ &lt;- with concat'' &gt;- sequential [ip <span class="pl-c1">4096</span>, relu, dropout <span class="pl-c1">0.5</span>, ip <span class="pl-c1">1000</span>, softmax]
+    <span class="pl-c1">return</span> <span class="pl-c1">()</span></pre></div>
+
+<p>that looks like</p>
+
+<p><a href="http://i.imgur.com/dsqgYna.png"><img src="http://i.imgur.com/dsqgYna.png" alt=""></a></p>
+
+<p>will generate</p>
+
+<div class="highlight highlight-lua"><pre><span class="pl-c1">require</span>(<span class="pl-s"><span class="pl-pds">"</span>nn<span class="pl-pds">"</span></span>)
+<span class="pl-k">local</span> seq0 <span class="pl-k">=</span> nn.<span class="pl-c1">Sequential</span>()
+<span class="pl-k">local</span> mod1 <span class="pl-k">=</span> nn.<span class="pl-c1">Threshold</span>()
+seq0:<span class="pl-c1">add</span>(mod1)
+<span class="pl-k">local</span> concat2 <span class="pl-k">=</span> nn.<span class="pl-c1">DepthConcat</span>()
+<span class="pl-k">local</span> seq3 <span class="pl-k">=</span> nn.<span class="pl-c1">Sequential</span>()
+<span class="pl-k">local</span> mod4 <span class="pl-k">=</span> nn.<span class="pl-c1">SpatialConvolutionMM</span>(<span class="pl-c1">nil</span>, <span class="pl-c1">nil</span>, <span class="pl-c1">nil</span>, <span class="pl-c1">nil</span>, <span class="pl-c1">1</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>)
+seq3:<span class="pl-c1">add</span>(mod4)
+<span class="pl-k">local</span> mod5 <span class="pl-k">=</span> nn.<span class="pl-c1">Threshold</span>()
+seq3:<span class="pl-c1">add</span>(mod5)
+<span class="pl-k">local</span> mod6 <span class="pl-k">=</span> nn.<span class="pl-c1">SpatialMaxPooling</span>(<span class="pl-c1">nil</span>, <span class="pl-c1">nil</span>, <span class="pl-c1">1</span>, <span class="pl-c1">1</span>)
+seq3:<span class="pl-c1">add</span>(mod6)
+<span class="pl-k">local</span> mod7 <span class="pl-k">=</span> nn.<span class="pl-c1">SpatialConvolutionMM</span>(<span class="pl-c1">nil</span>, <span class="pl-c1">nil</span>, <span class="pl-c1">nil</span>, <span class="pl-c1">nil</span>, <span class="pl-c1">1</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>)
+seq3:<span class="pl-c1">add</span>(mod7)
+<span class="pl-k">local</span> mod8 <span class="pl-k">=</span> nn.<span class="pl-c1">Threshold</span>()
+seq3:<span class="pl-c1">add</span>(mod8)
+concat2:<span class="pl-c1">add</span>(seq3)
+<span class="pl-k">local</span> seq9 <span class="pl-k">=</span> nn.<span class="pl-c1">Sequential</span>()
+<span class="pl-k">local</span> mod10 <span class="pl-k">=</span> nn.<span class="pl-c1">SpatialConvolutionMM</span>(<span class="pl-c1">nil</span>, <span class="pl-c1">nil</span>, <span class="pl-c1">nil</span>, <span class="pl-c1">nil</span>, <span class="pl-c1">1</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>)
+seq9:<span class="pl-c1">add</span>(mod10)
+<span class="pl-k">local</span> mod11 <span class="pl-k">=</span> nn.<span class="pl-c1">Threshold</span>()
+seq9:<span class="pl-c1">add</span>(mod11)
+<span class="pl-k">local</span> mod12 <span class="pl-k">=</span> nn.<span class="pl-c1">SpatialMaxPooling</span>(<span class="pl-c1">nil</span>, <span class="pl-c1">nil</span>, <span class="pl-c1">1</span>, <span class="pl-c1">1</span>)
+seq9:<span class="pl-c1">add</span>(mod12)
+<span class="pl-k">local</span> mod13 <span class="pl-k">=</span> nn.<span class="pl-c1">SpatialConvolutionMM</span>(<span class="pl-c1">nil</span>, <span class="pl-c1">nil</span>, <span class="pl-c1">nil</span>, <span class="pl-c1">nil</span>, <span class="pl-c1">1</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>)
+seq9:<span class="pl-c1">add</span>(mod13)
+<span class="pl-k">local</span> mod14 <span class="pl-k">=</span> nn.<span class="pl-c1">Threshold</span>()
+seq9:<span class="pl-c1">add</span>(mod14)
+concat2:<span class="pl-c1">add</span>(seq9)
+seq0:<span class="pl-c1">add</span>(concat2)
+<span class="pl-k">local</span> mod15 <span class="pl-k">=</span> nn.<span class="pl-c1">Linear</span>(<span class="pl-c1">nil</span>, <span class="pl-c1">4096</span>)
+seq0:<span class="pl-c1">add</span>(mod15)
+<span class="pl-k">local</span> mod16 <span class="pl-k">=</span> nn.<span class="pl-c1">Threshold</span>()
+seq0:<span class="pl-c1">add</span>(mod16)
+<span class="pl-k">local</span> mod17 <span class="pl-k">=</span> nn.<span class="pl-c1">Dropout</span>(<span class="pl-c1">0.5</span>)
+seq0:<span class="pl-c1">add</span>(mod17)
+<span class="pl-k">local</span> mod18 <span class="pl-k">=</span> nn.<span class="pl-c1">Linear</span>(<span class="pl-c1">nil</span>, <span class="pl-c1">1000</span>)
+seq0:<span class="pl-c1">add</span>(mod18)
+<span class="pl-k">local</span> mod19 <span class="pl-k">=</span> nn.<span class="pl-c1">LogSoftMax</span>()
+seq0:<span class="pl-c1">add</span>(mod19)
+<span class="pl-k">local</span> criteria20 <span class="pl-k">=</span> nn.<span class="pl-c1">ClassNLLCriterion</span>()
+<span class="pl-k">return</span> seq0, criteria20</pre></div>
+
+<h2>
+<a id="visualization-examples" class="anchor" href="#visualization-examples" aria-hidden="true"><span class="octicon octicon-link"></span></a>Visualization Examples</h2>
+
+<p>The <code>NN.Visualize</code> module provides some plotting tools. To use these,</p>
+
+<div class="highlight highlight-haskell"><pre>  <span class="pl-k">import</span> <span class="pl-c1">NN.Visualize</span>
+
+  <span class="pl-en">visualize</span> <span class="pl-k">::</span> <span class="pl-k">Net</span> <span class="pl-k">-&gt;</span> <span class="pl-k">DotGraph</span> <span class="pl-k">Node</span>
+  <span class="pl-en">png</span> <span class="pl-k">::</span> <span class="pl-c1">FilePath</span> <span class="pl-k">-&gt;</span> <span class="pl-k">DotGraph</span> <span class="pl-k">Node</span> <span class="pl-k">-&gt;</span> <span class="pl-c1">IO</span> <span class="pl-c1">FilePath</span>
+
+  <span class="pl-c">-- For example, to visualize GoogLeNet to a file</span>
+  <span class="pl-en">file</span> <span class="pl-k">::</span> <span class="pl-c1">FilePath</span>
+  (frontend googLeNet &amp; visualize &amp; png file) :: <span class="pl-c1">IO</span> <span class="pl-c1">FilePath</span></pre></div>
+
+<p>An example output is (click for higher resolution):</p>
+
+<p><img src="http://i.imgur.com/ScvjNmT.jpg" alt=""></p>
+
+<h2>
+<a id="parameter-sweeps" class="anchor" href="#parameter-sweeps" aria-hidden="true"><span class="octicon octicon-link"></span></a>Parameter Sweeps</h2>
+
+<p>To use this, write your model generation script as a Haskell file, and then (for example)</p>
+
+<div class="highlight highlight-bash"><pre>  caffe train --model <span class="pl-s"><span class="pl-pds">&lt;(</span>runhaskell Model.hs<span class="pl-pds">)</span></span> --solver=solver.prototxt</pre></div>
+
+<p>To perform a parameter sweep, use the parameterizing</p>
+
+<div class="highlight highlight-bash"><pre>  <span class="pl-k">for</span> <span class="pl-smi">model</span> <span class="pl-k">in</span> <span class="pl-s"><span class="pl-pds">$(</span>runhaskell Model.hs<span class="pl-pds">)</span></span><span class="pl-k">;</span> <span class="pl-k">do</span>
+      caffe train --model=<span class="pl-smi">$model</span> --solver=solver.prototxt
+  <span class="pl-k">done</span></pre></div>
+
+      <footer class="site-footer">
+        <span class="site-footer-owner"><a href="https://github.com/ajtulloch/dnngraph">dnngraph</a> is maintained by <a href="https://github.com/ajtulloch">ajtulloch</a>.</span>
+
+        <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the <a href="https://github.com/jasonlong/cayman-theme">Cayman theme</a> by <a href="https://twitter.com/jasonlong">Jason Long</a>.</span>
+      </footer>
+
+    </section>
+
+  
+  </body>
+</html>
+
