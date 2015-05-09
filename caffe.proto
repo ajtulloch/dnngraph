@@ -2,6 +2,39 @@
 
 package caffe;
 
+message PurineNetParameter {
+  enum Direction {
+    UpdateOutput = 1;
+    UpdateGradInput = 2;
+    AccGradParameters = 3;
+  }
+
+  enum Operation {
+    Computation = 1;
+    Optim = 2;
+    Copy = 3;
+  }
+  
+  message LayerNode {
+    optional int32 nodeId = 1;
+  }
+
+  message Node {
+    optional int32 nodeId = 1;
+    optional LayerParameter layerParameter = 2;
+    optional Direction direction = 3;
+    optional Operation operation = 4;
+  }
+
+  message Edge {
+    optional int32 fromId = 1;
+    optional int32 toId = 2;
+  }
+
+  repeated Node nodes = 2;
+  repeated Edge edges = 3;
+}
+
 message BlobProto {
   optional int32 num = 1 [default = 0];
   optional int32 channels = 2 [default = 0];
@@ -534,7 +567,7 @@ message InfogainLossParameter {
 
 // Message that stores parameters used by InnerProductLayer
 message InnerProductParameter {
-  optional uint32 num_input = 100; // The number of inputs, used by TORCH  
+  optional uint32 num_input = 100; // The number of inputs, used by TORCH
   optional uint32 num_output = 1; // The number of outputs for the layer
   optional bool bias_term = 2 [default = true]; // whether to have bias terms
   optional FillerParameter weight_filler = 3; // The filler for the weight

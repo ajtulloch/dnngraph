@@ -105,8 +105,6 @@ Library
                      , filepath
                      , formatting
                      , graphviz
-                     , ihaskell
-                     , ihaskell-magic
                      , language-lua
                      , lens
                      , mtl

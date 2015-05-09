@@ -347,4 +347,7 @@ To perform a parameter sweep, use the parameterizing
   for model in $(runhaskell Model.hs); do
       caffe train --model=$model --solver=solver.prototxt
   done
+#+end_#+begin_src language
+
 #+end_src
+

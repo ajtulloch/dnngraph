@@ -1,20 +1,24 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
-module NN.Backend.Purine.Purine where
+module NN.Backend.Purine.Purine(module D, module NN.Backend.Purine.Purine) where
 
 import           Control.Applicative
 import           Control.Monad
-import           Data.Graph.Inductive.Graph hiding ((&))
+import           Data.Graph.Inductive.Graph             as G hiding ((&))
 import           Data.Maybe
-import           Gen.Caffe.LayerParameter   (LayerParameter)
+import           Gen.Caffe.LayerParameter               (LayerParameter)
+import           Gen.Caffe.PurineNetParameter.Direction as D
 import           NN.DSL
 import           NN.Graph
 
 data Tensor = Tensor deriving (Show)
-data Direction = UpdateOutput | UpdateGradInput | AccGradParameters deriving (Show)
+
 data Operation = Computation LayerParameter Direction | Optim | Copy deriving (Show)
+
 data Blob = Weights | GradWeights | Bottom | GradBottom | Top | GradTop deriving (Show)
+
 data Purine = B Blob Tensor | Op Operation deriving (Show)
+
 data PurineLayer = StatefulLayer {bottom, gradBottom, top, gradTop, weights, gradWeights :: Node}
                  | StatelessLayer {bottom, gradBottom, top, gradTop ::  Node}
                  | CriterionLayer {bottom, gradBottom, top :: Node }
@@ -65,7 +69,8 @@ layerToPurine lp = do
 
             gradTop >-> accGradParameters
             weights >-> updateOutput
-            weights >-> accGradParameters
+            -- linearity assumption
+            -- weights >-> accGradParameters
             weights >-> updateGradInput
             accGradParameters >-> gradWeights
 
@@ -74,7 +79,7 @@ layerToPurine lp = do
             -- the gradients are updated before
             weights >-> optim
             gradWeights >-> optim
-            -- BACKEGDE
+            -- back edge
             optim >-> weights
 
             return StatefulLayer{..}
@@ -85,10 +90,7 @@ hasOne :: [a] -> Maybe a
 hasOne [x] = Just x
 hasOne _ = Nothing
 
-insertFrom
-  :: Data.Graph.Inductive.Graph.DynGraph gr =>
-     Data.Graph.Inductive.Graph.Node
-     -> gr a () -> Data.Graph.Inductive.Graph.Node -> gr a ()
+insertFrom :: G.DynGraph gr => G.Node -> gr a () -> G.Node -> gr a ()
 insertFrom copySource g'' dest = insEdge (copySource, dest, ()) g''
 
 -- Note that we can do multi-GPU, etc trivially here.
@@ -104,18 +106,18 @@ elideCopies g = foldl elideCopy g [n | (n, Op Copy) <- labNodes g]
             -- a copy node must have one parent and one child for this
             -- to be valid
 
-            copySource <- hasOne $ pre g' copyNode
+            copySource <- hasOne $ G.pre g' copyNode
             copyDest <- hasOne $ suc g' copyNode
             -- the destination of the copy operation must have only
             -- one input.
-            _ <- hasOne $ pre g' copyDest
+            _ <- hasOne $ G.pre g' copyDest
             let copyDestSucs = suc g' copyDest
             return ((delNode copyNode . delNode copyDest) $ foldl (insertFrom copySource) g' copyDestSucs)
 
 findPair :: Eq a => [(a, b)] -> (a, a) -> Maybe (b, b)
 findPair xs (x, y) =  (,) <$> lookup x xs <*> lookup y xs
 
-graphToPurine :: Gr LayerParameter () -> G Purine [(Node, PurineLayer)]
+graphToPurine :: Net -> G Purine [(Node, PurineLayer)]
 graphToPurine layerGr = do
   purineNodes <- forM (labNodes layerGr) layerToPurine'
   let toConnect = map (findPair purineNodes) (edges layerGr)

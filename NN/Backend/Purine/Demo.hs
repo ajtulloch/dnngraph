@@ -2,6 +2,7 @@ module NN.Backend.Purine.Demo where
 
 import           Control.Lens
 import           Gen.Caffe.Phase             as P
+import           NN.Backend.Purine
 import           NN.Backend.Purine.Purine
 import           NN.Backend.Purine.Visualize
 import           NN.DSL
@@ -40,3 +41,10 @@ main2 = do
   _ <- png "/tmp/x.png" . compile $ gr
   _ <- png "/tmp/x2.png" . compileNoCopy $ gr
   return ()
+
+main3 :: IO ()
+main3 = do
+  let gr = do
+          _ <- sequential [conv, relu, softmax]
+          return ()
+  print $ gr & parse & middleEnd & backend

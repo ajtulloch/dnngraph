@@ -5,8 +5,8 @@ import google.protobuf.text_format as pb2_text
 import sys
 
 
-def binary_to_text(binary_file, text_file):
-    msg = pb2.NetParameter()
+def binary_to_text(binary_file, text_file, method):
+    msg = pb2.NetParameter() if method == "caffe" else pb2.PurineNetParameter()
 
     with open(binary_file) as f:
         msg.ParseFromString(f.read())
@@ -17,4 +17,6 @@ def binary_to_text(binary_file, text_file):
 if __name__ == "__main__":
     binary_file = sys.argv[1]
     text_file = sys.argv[2]
-    binary_to_text(binary_file, text_file)
+    method = sys.argv[3]
+    assert method in ("caffe", "purine")
+    binary_to_text(binary_file, text_file, method)
