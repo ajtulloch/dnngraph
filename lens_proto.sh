@@ -4,6 +4,7 @@ set -e
 
 rm -r Gen/ || true
 hprotoc --prefix Gen caffe.proto
+hprotoc --prefix Gen purine.proto
 (
     cd Gen
     for f in $(find . -iname "*.hs"); do 
