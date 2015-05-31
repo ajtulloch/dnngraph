@@ -14,4 +14,5 @@ hprotoc --prefix Gen purine.proto
 )
 
 protoc caffe.proto --python_out=Gen/
+protoc purine.proto --python_out=Gen/
 touch Gen/__init__.py
