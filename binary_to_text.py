@@ -1,12 +1,13 @@
 #! /usr/bin/env python
 
-import Gen.caffe_pb2 as pb2
+from Gen.caffe_pb2 import NetParameter
+from Gen.purine_pb2 import PurineNetParameter
 import google.protobuf.text_format as pb2_text
 import sys
 
 
 def binary_to_text(binary_file, text_file, method):
-    msg = pb2.NetParameter() if method == "caffe" else pb2.PurineNetParameter()
+    msg = NetParameter() if method == "caffe" else PurineNetParameter()
 
     with open(binary_file) as f:
         msg.ParseFromString(f.read())
