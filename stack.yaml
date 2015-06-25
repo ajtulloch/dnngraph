@@ -1,0 +1,8 @@
+flags: {}
+packages:
+- '.'
+extra-deps:
+- language-lua-0.6.3.2
+- protocol-buffers-2.0.17
+- protocol-buffers-descriptor-2.0.17
+resolver: lts-2.14
