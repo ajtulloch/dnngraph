@@ -17,6 +17,16 @@ It consists of several parts:
   density)
 
 For a guided example, see a [[http://bit.ly/17kDYze][demonstration IHaskell Notebook]].
+** Building
+Make sure that you have Python 2 and =protoc= from [[https://developers.google.com/protocol-buffers/][Protocol Buffers]] installed. Then run
+#+BEGIN_SRC 
+$ cabal install hprotoc
+$ ./lens_proto.sh # generate code from protocol buffers
+$ cabal install
+#+END_SRC
+
+
+
 ** DSL Examples
 The following script generates a replica of
 https://github.com/BVLC/caffe/blob/master/models/bvlc_alexnet/train_val.prototxt.
@@ -202,10 +212,10 @@ Available commands:
                            --model=<>
   torch                    Generate Lua code to be `require`'d into an existing
                            Torch script
-  pdf                      Generate a PDF visualizing the model's connectivity
+  visualize                Generate an image visualizing the model's connectivity
 
 $ runhaskell NN/Examples/GoogLeNet.hs caffe --output /tmp/x.prototxt
-$ runhaskell NN/Examples/GoogLeNet.hs pdf --output /tmp/x.pdf
+$ runhaskell NN/Examples/GoogLeNet.hs visualize --format pdf --output /tmp/x.pdf
 #+END_SRC
 
 ** Caffe Backend
