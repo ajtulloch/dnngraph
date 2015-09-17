@@ -49,34 +49,34 @@ torchModules lp = go (layerTy lp)
       -- Ugly case anaysis, sorry.
       go Pool = [nn ty' [kW, kH, dW, dH]]
           where
-            kW = poolP PP._kernel_size
+            kW = poolP PP.kernel_size
             kH = kW
-            dW = poolP PP._stride
+            dW = poolP PP.stride
             dH = dW
-            ty' = case poolP PP._pool of
+            ty' = case poolP PP.pool of
                    Just MAX -> "SpatialMaxPooling"
                    Just AVE -> "SpatialAveragePooling"
                    _ -> error "Unsupported Pooling Type"
-            poolP f = lp ^?! LP._pooling_param._Just ^?! f
+            poolP f = lp ^?! LP.pooling_param._Just ^?! f
       go Conv = [nn (convolutionImpl kW) [nInputPlane, nOutputPlane, kW, kH, dW, dH, padding]]
           where
-            kW = convP CP._kernel_size
+            kW = convP CP.kernel_size
             kH = kW
-            dW = convP CP._stride
+            dW = convP CP.stride
             dH = dW
-            padding = convP CP._pad
+            padding = convP CP.pad
             -- TODO - propagation pass to size the layers
             nInputPlane = Nothing
-            nOutputPlane = convP CP._num_output
-            convP f = lp ^?! LP._convolution_param._Just ^?! f
+            nOutputPlane = convP CP.num_output
+            convP f = lp ^?! LP.convolution_param._Just ^?! f
       go ReLU = [nn' "Threshold"]
       go IP = [nn "Linear" [nInput, nOutput]]
           where
             -- TODO - propagation pass to size the layers
             nInput = Nothing
-            nOutput = lp ^?! LP._inner_product_param._Just ^?! IP._num_output
+            nOutput = lp ^?! LP.inner_product_param._Just ^?! IP.num_output
       go Dropout = [nn "Dropout" [ratio]] where
-          Just ratio = lp ^?! LP._dropout_param._Just ^?! DP._dropout_ratio
+          Just ratio = lp ^?! LP.dropout_param._Just ^?! DP.dropout_ratio
       go SoftmaxWithLoss = [nn' "LogSoftMax", criterion "ClassNLLCriterion"]
       go Concat = [] -- Handled by flattening implementation
       go ty' = error  $ "Unhandled layer type: " ++ show ty'

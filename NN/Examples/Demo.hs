@@ -21,7 +21,7 @@ import           NN.Examples.GoogLeNet
 caffe :: IO ()
 caffe = do
   let output = parse googLeNet & Caffe.middleEnd & Caffe.backend
-  let names = output ^. NP._layer ^.. traverse . LP._name ^.. traverse . _Just
+  let names = output ^. NP.layer ^.. traverse . LP.name ^.. traverse . _Just
   print names
 
 torch :: IO ()

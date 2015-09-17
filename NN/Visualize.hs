@@ -77,24 +77,24 @@ dimensions lp = params ty'
       params Conv = L.unlines ["Conv",
                                format (int % "x" % int % "x" % int % " s" % int) o sz sz st]
           where
-            cp f = lp ^?! _convolution_param._Just ^?! f._Just
-            sz = cp CP._kernel_size
-            st = cp CP._stride
-            o = cp CP._num_output
+            cp f = lp ^?! convolution_param._Just ^?! f._Just
+            sz = cp CP.kernel_size
+            st = cp CP.stride
+            o = cp CP.num_output
       params IP = L.unlines ["FC", format int ip']
           where
-            ip' = lp ^?! _inner_product_param._Just ^?! IP._num_output._Just
+            ip' = lp ^?! inner_product_param._Just ^?! IP.num_output._Just
       -- 3x3 s2
       params Pool = L.unlines [pty', format (int % "x" % int % " s" % int) sz sz st]
           where
-            pp f = lp ^?! _pooling_param._Just ^?! f._Just
-            pty' = case pp _pool of
+            pp f = lp ^?! pooling_param._Just ^?! f._Just
+            pty' = case pp pool of
                MAX -> "MaxPool"
                AVE -> "AveragePool"
                STOCHASTIC -> "StochasticPool"
-            sz = pp PP._kernel_size
-            st = pp PP._stride
+            sz = pp PP.kernel_size
+            st = pp PP.stride
       params Accuracy = format ("Top-" % int) k
           where
-            k = lp ^?! _accuracy_param._Just ^?! _top_k._Just
+            k = lp ^?! accuracy_param._Just ^?! top_k._Just
       params _ = (L.pack . asCaffe) ty'
