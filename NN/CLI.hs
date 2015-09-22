@@ -44,7 +44,7 @@ opts = subparser (caffe <> torch <> graph')
          nc name parser desc = command name (info (helper <*> parser) (progDesc desc))
          caffe = nc "caffe" (Caffe <$> fileName' <*> binaryToText') "Generate a Caffe .prototxt to run with `caffe train --model=<>"
          torch = nc "torch" (Torch <$> fileName') "Generate Lua code to be `require`'d into an existing Torch script"
-         graph' = nc "visualize" (Visualize <$> fileName' <*> vf) "Generate a Visualize visualizing the model's connectivity"
+         graph' = nc "visualize" (Visualize <$> fileName' <*> vf) "Generate an image visualizing the model's connectivity"
          fileName' = strOption (long "output" <> help "Write output to FILE" <> metavar "FILE")
          binaryToText' = strOption (long "binary_to_text"
                                    <> help "Path to binary_to_text.py BINARY"
