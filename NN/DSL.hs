@@ -71,74 +71,74 @@ s = P.fromString
 def :: Default a => a
 def = P.defaultValue
 
-ty type'' = LP._type' ?~ s (asCaffe type'')
+ty type'' = LP.type' ?~ s (asCaffe type'')
 
 layerTy :: LayerParameter -> LayerTy
-layerTy l = fromJust (LP.type' l) & toString & toCaffe & fromJust
+layerTy l = fromJust (LP._type' l) & toString & toCaffe & fromJust
 
-phase' phase'' = LP._include <>~ singleton (def & _phase ?~ phase'')
+phase' phase'' = LP.include <>~ singleton (def & phase ?~ phase'')
 
-param' v = _param .~ fromList v
+param' v = param .~ fromList v
 
 -- Data
 setF outer f n = set (outer . _Just . f) (Just n)
-source' source'' = setF _data_param DP._source (s source'')
-cropSize' = setF _transform_param TP._crop_size
-meanFile' meanFile'' = setF _transform_param TP._mean_file (s meanFile'')
-mirror' = setF _transform_param TP._mirror
-batchSize' = setF _data_param DP._batch_size
-backend' =  setF _data_param DP._backend
+source' source'' = setF data_param DP.source (s source'')
+cropSize' = setF transform_param TP.crop_size
+meanFile' meanFile'' = setF transform_param TP.mean_file (s meanFile'')
+mirror' = setF transform_param TP.mirror
+batchSize' = setF data_param DP.batch_size
+backend' =  setF data_param DP.backend
 
 -- Convolution
-setConv = setF _convolution_param
-numOutputC' = setConv CP._num_output
-numInputC' = setConv CP._num_input
-kernelSizeC' = setConv CP._kernel_size
-padC' = setConv CP._pad
-groupC' = setConv CP._group
-strideC' = setConv CP._stride
-biasFillerC' = setConv CP._bias_filler
-weightFillerC' = setConv CP._weight_filler
+setConv = setF convolution_param
+numOutputC' = setConv CP.num_output
+numInputC' = setConv CP.num_input
+kernelSizeC' = setConv CP.kernel_size
+padC' = setConv CP.pad
+groupC' = setConv CP.group
+strideC' = setConv CP.stride
+biasFillerC' = setConv CP.bias_filler
+weightFillerC' = setConv CP.weight_filler
 
 -- Pooling
-setPool = setF _pooling_param
-pool' = setPool PP._pool
-sizeP' = setPool PP._kernel_size
-strideP' = setPool PP._stride
-padP' = setPool PP._pad
+setPool = setF pooling_param
+pool' = setPool PP.pool
+sizeP' = setPool PP.kernel_size
+strideP' = setPool PP.stride
+padP' = setPool PP.pad
 
 -- Inner Product
-setIP = setF _inner_product_param
-weightFillerIP' = setIP IP._weight_filler
-numInputIP' = setIP IP._num_input
-numOutputIP' = setIP IP._num_output
-biasFillerIP' = setIP IP._bias_filler
+setIP = setF inner_product_param
+weightFillerIP' = setIP IP.weight_filler
+numInputIP' = setIP IP.num_input
+numOutputIP' = setIP IP.num_output
+biasFillerIP' = setIP IP.bias_filler
 
 -- LRN
-setLRN = setF _lrn_param
-localSize' = setLRN LRN._local_size
-alphaLRN' = setLRN LRN._alpha
-betaLRN' = setLRN LRN._beta
+setLRN = setF lrn_param
+localSize' = setLRN LRN.local_size
+alphaLRN' = setLRN LRN.alpha
+betaLRN' = setLRN LRN.beta
 
 -- Fillers
-constant value' = def & FP._type' ?~ s "constant" & _value ?~ value'
-gaussian std' = def & FP._type' ?~ s "gaussian" & _std ?~ std'
-xavier std' = def & FP._type' ?~ s "xavier" & _std ?~ std'
+constant value' = def & FP.type' ?~ s "constant" & value ?~ value'
+gaussian std' = def & FP.type' ?~ s "gaussian" & std ?~ std'
+xavier std' = def & FP.type' ?~ s "xavier" & std ?~ std'
 zero = constant 0.0
 
 -- Multipler
-lrMult' value' = _lr_mult ?~ value'
-decayMult' value' = _decay_mult ?~ value'
+lrMult' value' = lr_mult ?~ value'
+decayMult' value' = decay_mult ?~ value'
 
 -- Simple Layers
-accuracy k' = def & ty Accuracy & phase' TEST & _accuracy_param ?~ (def & AP._top_k ?~ k')
+accuracy k' = def & ty Accuracy & phase' TEST & accuracy_param ?~ (def & AP.top_k ?~ k')
 softmax = def & ty SoftmaxWithLoss
-dropout ratio = def & ty Dropout & _dropout_param ?~ (def & _dropout_ratio ?~ ratio)
+dropout ratio = def & ty Dropout & dropout_param ?~ (def & dropout_ratio ?~ ratio)
 relu = def & ty ReLU
-conv = def & ty Conv & _convolution_param ?~ def
-ip n = def & ty IP & _inner_product_param ?~ def & numOutputIP' n
-data' = def & ty Data & _transform_param ?~ def & _data_param ?~ def
-maxPool = def & ty Pool & _pooling_param ?~ def & pool' MAX
-avgPool = def & ty Pool & _pooling_param ?~ def & pool' AVE
-lrn = def & ty LRN & _lrn_param ?~ def
+conv = def & ty Conv & convolution_param ?~ def
+ip n = def & ty IP & inner_product_param ?~ def & numOutputIP' n
+data' = def & ty Data & transform_param ?~ def & data_param ?~ def
+maxPool = def & ty Pool & pooling_param ?~ def & pool' MAX
+avgPool = def & ty Pool & pooling_param ?~ def & pool' AVE
+lrn = def & ty LRN & lrn_param ?~ def
 concat' = def & ty Concat

@@ -26,19 +26,19 @@ middleEnd :: Net -> Net
 middleEnd = optimizeWith caffePasses
 
 layerName :: LayerParameter -> Int -> Utf8
-layerName l i = printf "%s_%d" (type' l & fromJust & toString & map toLower) i & s
+layerName l i = printf "%s_%d" (_type' l & fromJust & toString & map toLower) i & s
 
 backend :: Net -> NetParameter
-backend gr = def & _layer <>~ S.fromList (topsort' gr)
+backend gr = def & layer <>~ S.fromList (topsort' gr)
 
 addLabels :: Pass
 addLabels (_, _, lp) = lp & update (layerTy lp)
     where
       -- Data has labels going out
-      update Data = LP._top <>~ S.singleton (s "label")
+      update Data = LP.top <>~ S.singleton (s "label")
       -- Criterion have labels coming in
-      update SoftmaxWithLoss = LP._bottom <>~ S.singleton (s "label")
-      update Accuracy = LP._bottom <>~ S.singleton (s "label")
+      update SoftmaxWithLoss = LP.bottom <>~ S.singleton (s "label")
+      update Accuracy = LP.bottom <>~ S.singleton (s "label")
       -- Everything else can be ignored
       update _ = id
 
@@ -52,8 +52,8 @@ optimizeInPlaceLayer layerTy' = [updateIfInPlace, updateIfParentInPlace] where
     inPlaceParents gr i = filter inPlace . map fst $ pres gr i
 
     updateIfInPlace (_, i, lp) =
-        case (layerTy lp == layerTy', F.toList (top lp)) of
-          (True, [_]) -> lp & LP._top .~ bottom lp
+        case (layerTy lp == layerTy', F.toList (LP._top lp)) of
+          (True, [_]) -> lp & LP.top .~ LP._bottom lp
           (True, _) -> error $ printf "Can only have one output for an in-place layer" ++ show (layerName lp i)
           (False, _) -> lp
 
@@ -70,11 +70,11 @@ optimizeInPlaceLayer layerTy' = [updateIfInPlace, updateIfParentInPlace] where
          parents ->
              -- TODO this is super dodgy and incorrect in the general
              -- case (there are some weird invariants we rely on), but it works for now.
-             if length parents /= (length . F.toList . bottom) lp
+             if length parents /= (length . F.toList . LP._bottom) lp
              then Left $ printf "Must have all parents in-place for in-place optimizations" ++ show (layerName lp i)
-             else let parentTops = F.concatMap (F.toList . LP.top) parents in
-                  if length parentTops == length ((F.toList . LP.bottom) lp)
-                  then Right $ lp & LP._bottom .~ S.fromList parentTops
+             else let parentTops = F.concatMap (F.toList . LP._top) parents in
+                  if length parentTops == length ((F.toList . LP._bottom) lp)
+                  then Right $ lp & LP.bottom .~ S.fromList parentTops
                   else Left $ error "asdf"
 
 labelled :: Net -> [Node] -> [(LayerParameter, Node)]
@@ -85,6 +85,6 @@ pres gr j = labelled gr (G.pre gr j)
 
 addConnection :: Pass
 addConnection (gr, i, lp) = lp
-                            & LP._name ?~ layerName lp i
-                            & LP._bottom .~ S.fromList (map (uncurry layerName) (pres gr i))
-                            & LP._top <>~ S.singleton (layerName lp i)
+                            & LP.name ?~ layerName lp i
+                            & LP.bottom .~ S.fromList (map (uncurry layerName) (pres gr i))
+                            & LP.top <>~ S.singleton (layerName lp i)

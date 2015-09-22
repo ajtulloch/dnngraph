@@ -31,7 +31,7 @@ conv2 = googleConv & numOutputC' 192 & padC' 1 & kernelSizeC' 3 & weightFillerC'
 topPool = avgPool & sizeP' 7 & strideP' 1
 topFc = googleIP 1000 & biasFillerIP' (constant 0) & weightFillerIP' (xavier 0.0)
         -- Weird, but in Caffe replication
-        & _inner_product_param._Just.IP._weight_filler._Just._std .~ Nothing
+        & inner_product_param._Just.IP.weight_filler._Just.std .~ Nothing
 
 data Inception = Inception {_1x1, _3x3reduce, _3x3, _5x5reduce, _5x5, _poolProj :: Word32}
 
@@ -48,14 +48,14 @@ inception input Inception{..} = do
        [googleConv & numOutputC' _1x1  & kernelSizeC' 1 & weightFillerC' (xavier 0.03), relu],
        [googleConv & numOutputC' _3x3reduce & kernelSizeC' 1 & weightFillerC' (xavier 0.09), relu, googleConv & numOutputC' _3x3 & kernelSizeC' 3 & weightFillerC' (xavier 0.03) & padC' 1, relu],
        [googleConv & numOutputC' _5x5reduce & kernelSizeC' 1 & weightFillerC' (xavier 0.2), relu, googleConv & numOutputC' _5x5 & kernelSizeC' 5 & weightFillerC' (xavier 0.03) & padC' 2, relu],
-       [maxPool& sizeP' 3 & strideP' 3 & padP' 1, googleConv & numOutputC' _poolProj & kernelSizeC' 1 & weightFillerC' (xavier 0.1), relu]]
+       [maxPool & sizeP' 3 & strideP' 3 & padP' 1, googleConv & numOutputC' _poolProj & kernelSizeC' 1 & weightFillerC' (xavier 0.1), relu]]
 
 intermediateClassifier :: Node -> NetBuilder ()
 intermediateClassifier source = do
   (input, representation) <- sequential [pool1, conv1', relu, fc1, relu, dropout 0.7, fc2]
   source >-> input
 
-  forM_ [accuracy 1, accuracy 5, softmax & _loss_weight <>~ singleton 0.3] $ attach (From representation)
+  forM_ [accuracy 1, accuracy 5, softmax & loss_weight <>~ singleton 0.3] $ attach (From representation)
     where
       pool1 = avgPool & sizeP' 5 & strideP' 3
       conv1' = googleConv & numOutputC' 128 & kernelSizeC' 1 & weightFillerC' (xavier 0.08)
